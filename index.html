@@ -361,7 +361,7 @@
       <canvas id="rateChart"></canvas>
       <div class="chart-error" id="chart-error">그래프를 불러오지 못했습니다. 새로고침해 주세요.</div>
     </div>
-    <div class="chart-source">Yahoo Finance (FX 시장 기준)</div>
+    <div class="chart-source">기간 시작 대비 등락률 · Yahoo Finance (FX 시장 기준)</div>
   </div>
 </div>
 
@@ -547,56 +547,66 @@ function updateChart() {
   chartEl.style.display = 'block';
   errorEl.style.display = 'none';
 
+  // 단위가 다른 세 통화를 같은 축에 표시하기 위해 기간 시작 대비 등락률(%)로 정규화
   const datasets = CURRENCIES.map(cur => {
     const filtered = filterByPeriod(historicalData[cur.code] || [], currentPeriod);
+    if (filtered.length === 0) return null;
+    const base = filtered[0].close;
     return {
       label: cur.code,
-      data: filtered.map(d => ({ x: d.ts * 1000, y: d.close })),
+      data: filtered.map(d => ({ x: d.ts * 1000, y: ((d.close - base) / base) * 100 })),
       borderColor: CHART_COLORS[cur.code],
-      backgroundColor: CHART_COLORS[cur.code] + '18',
       borderWidth: 2,
       pointRadius: 0,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: CHART_COLORS[cur.code],
       tension: 0.3,
       fill: false,
     };
-  });
+  }).filter(Boolean);
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { position: 'top', labels: { font: { size: 12 }, boxWidth: 12, padding: 16 } },
+      tooltip: {
+        callbacks: {
+          title: items => new Date(items[0].parsed.x).toLocaleDateString('ko-KR'),
+          label: item => {
+            const v = item.parsed.y;
+            return ` ${item.dataset.label}: ${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+          },
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: 'time',
+        time: { tooltipFormat: 'yyyy.MM.dd' },
+        ticks: { maxTicksLimit: 6, font: { size: 11 }, color: '#9CA3AF' },
+        grid: { display: false },
+      },
+      y: {
+        ticks: {
+          font: { size: 11 },
+          color: '#9CA3AF',
+          callback: v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%',
+        },
+        grid: { color: '#F3F4F6' },
+      }
+    }
+  };
 
   if (chart) {
     chart.data.datasets = datasets;
+    chart.options = chartOptions;
     chart.update('active');
     return;
   }
 
-  chart = new Chart(chartEl, {
-    type: 'line',
-    data: { datasets },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { position: 'top', labels: { font: { size: 12 }, boxWidth: 12 } },
-        tooltip: {
-          callbacks: {
-            title: items => new Date(items[0].parsed.x).toLocaleDateString('ko-KR'),
-            label: item => ` ${item.dataset.label}: ${fmt(item.parsed.y)}원`,
-          }
-        }
-      },
-      scales: {
-        x: {
-          type: 'time',
-          time: { tooltipFormat: 'yyyy.MM.dd' },
-          ticks: { maxTicksLimit: 6, font: { size: 11 }, color: '#9CA3AF' },
-          grid: { display: false },
-        },
-        y: {
-          ticks: { font: { size: 11 }, color: '#9CA3AF', callback: v => fmt(v) + '원' },
-          grid: { color: '#F3F4F6' },
-        }
-      }
-    }
-  });
+  chart = new Chart(chartEl, { type: 'line', data: { datasets }, options: chartOptions });
 }
 
 function changePeriod(period, btn) {
