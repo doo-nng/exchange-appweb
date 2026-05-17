@@ -70,18 +70,42 @@ exports.handler = async (event) => {
     }
 
     if (type === 'history') {
-      const jsons = await Promise.all(
-        SYMBOLS.map(s => httpsGet(`/v8/finance/chart/${s}?interval=1d&range=${range}`))
-      );
-      const results = jsons.map((json, i) => {
+      // CNYKRW=X는 Yahoo에서 직접 과거 데이터가 없음 → USDKRW ÷ USDCNY 크로스 계산
+      const [usdkrwJson, jpykrwJson, usdcnyJson] = await Promise.all([
+        httpsGet(`/v8/finance/chart/USDKRW=X?interval=1d&range=${range}`),
+        httpsGet(`/v8/finance/chart/JPYKRW=X?interval=1d&range=${range}`),
+        httpsGet(`/v8/finance/chart/USDCNY=X?interval=1d&range=${range}`),
+      ]);
+
+      function parseChart(json, symbol) {
         const result = json.chart.result[0];
         const timestamps = result.timestamp;
         const closes = result.indicators.quote[0].close;
-        const data = timestamps
-          .map((ts, j) => ({ ts, close: closes[j] }))
+        return timestamps
+          .map((ts, i) => ({ ts, close: closes[i] }))
           .filter(d => d.close != null);
-        return { symbol: SYMBOLS[i], data };
-      });
+      }
+
+      const usdkrw = parseChart(usdkrwJson, 'USDKRW=X');
+      const jpykrw = parseChart(jpykrwJson, 'JPYKRW=X');
+      const usdcny  = parseChart(usdcnyJson, 'USDCNY=X');
+
+      // USDCNY를 타임스탬프 맵으로 변환 (날짜 단위로 매칭)
+      const cnyMap = new Map(usdcny.map(d => [Math.floor(d.ts / 86400), d.close]));
+      const cnykrw = usdkrw
+        .map(d => {
+          const day = Math.floor(d.ts / 86400);
+          const usdcnyRate = cnyMap.get(day) || cnyMap.get(day - 1) || cnyMap.get(day + 1);
+          if (!usdcnyRate) return null;
+          return { ts: d.ts, close: d.close / usdcnyRate };
+        })
+        .filter(Boolean);
+
+      const results = [
+        { symbol: 'USDKRW=X', data: usdkrw },
+        { symbol: 'JPYKRW=X', data: jpykrw },
+        { symbol: 'CNYKRW=X', data: cnykrw },
+      ];
       return {
         statusCode: 200,
         headers: { ...corsHeaders, 'Cache-Control': 'public, max-age=43200' },
