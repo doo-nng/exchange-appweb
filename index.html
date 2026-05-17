@@ -681,8 +681,7 @@ window.addEventListener('online', () => {
     return;
   }
   // 현재 환율 + 과거 데이터 병렬 로드
-  await loadHistoricalData();  // 먼저 로드해서 카드 렌더 시 stats 계산 가능하게
-  await loadCurrentRates();
+  await Promise.all([loadCurrentRates(), loadHistoricalData()]);
 })();
 </script>
 </body>
