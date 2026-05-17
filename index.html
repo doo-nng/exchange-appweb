@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>환율 대시보드</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#2563EB">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="환율">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-base: #F8F9FA;
+      --bg-card: #FFFFFF;
+      --text-primary: #1A1A1A;
+      --text-secondary: #6B7280;
+      --text-tertiary: #9CA3AF;
+      --rise: #EF4444;
+      --fall: #3B82F6;
+      --neutral: #9CA3AF;
+      --cheap: #3B82F6;
+      --expensive: #EF4444;
+      --border: #E5E7EB;
+      --accent: #2563EB;
+      --banner-warn-bg: #FEF9C3;
+      --banner-warn-text: #854D0E;
+      --banner-offline-bg: #F3F4F6;
+      --banner-offline-text: #6B7280;
+    }
+
+    body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+    }
+
+    /* 배너 */
+    .banner {
+      display: none;
+      padding: 10px 20px;
+      font-size: 13px;
+      text-align: center;
+      font-weight: 500;
+    }
+    .banner.warn { background: var(--banner-warn-bg); color: var(--banner-warn-text); }
+    .banner.offline { background: var(--banner-offline-bg); color: var(--banner-offline-text); }
+    .banner.visible { display: block; }
+
+    /* 메인 컨테이너 */
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 20px 16px 48px;
+    }
+
+    /* 헤더 */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .header-title { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+    .update-info { font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
+
+    .refresh-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .refresh-btn:hover { background: var(--bg-base); }
+    .refresh-btn:active { background: var(--border); }
+    .refresh-btn.loading .icon { animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 카드 그리드 */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 767px) {
+      .cards-grid { grid-template-columns: 1fr; }
+    }
+
+    /* 환율 카드 */
+    .currency-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 16px 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .currency-card.loading { opacity: 0.5; }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .card-currency { display: flex; align-items: center; gap: 8px; }
+    .flag { font-size: 22px; line-height: 1; }
+    .currency-code { font-size: 16px; font-weight: 700; }
+    .currency-name { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+
+    .change-badge {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 7px;
+      border-radius: 6px;
+    }
+    .change-badge.rise { color: var(--rise); background: #FEF2F2; }
+    .change-badge.fall { color: var(--fall); background: #EFF6FF; }
+    .change-badge.neutral { color: var(--neutral); background: #F9FAFB; }
+
+    .card-rate {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 2px;
+    }
+    .card-rate-unit { font-size: 13px; color: var(--text-secondary); margin-bottom: 14px; }
+
+    /* 레인지 바 */
+    .range-section { margin-bottom: 12px; }
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-tertiary);
+      margin-bottom: 6px;
+    }
+    .range-track {
+      position: relative;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      margin-bottom: 4px;
+    }
+    .range-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+    .range-marker {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: left 0.5s ease;
+    }
+    .range-comment {
+      font-size: 11px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-top: 6px;
+    }
+    .range-placeholder {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      font-style: italic;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .card-source { font-size: 10px; color: var(--text-tertiary); }
+    .card-disclaimer { font-size: 10px; color: var(--text-tertiary); text-align: right; }
+
+    /* Skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 50%, #F3F4F6 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: 6px;
+    }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .skeleton-rate { height: 36px; width: 60%; margin-bottom: 10px; }
+    .skeleton-bar { height: 6px; width: 100%; margin: 12px 0; }
+    .skeleton-text { height: 12px; width: 80%; }
+
+    /* 그래프 섹션 */
+    .chart-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .chart-title { font-size: 15px; font-weight: 600; }
+
+    /* 기간 탭 */
+    .period-tabs {
+      display: flex;
+      background: var(--bg-base);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .period-tab {
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      border: none;
+      background: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .period-tab.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    .chart-wrapper { position: relative; height: 220px; }
+    .chart-source {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      text-align: right;
+      margin-top: 8px;
+    }
+    .chart-error {
+      display: none;
+      text-align: center;
+      padding: 40px;
+      color: var(--text-secondary);
+      font-size: 13px;
+    }
+
+    /* 토스트 */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: #1A1A1A;
+      color: white;
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 13px;
+      z-index: 999;
+      transition: transform 0.25s ease;
+      white-space: nowrap;
+      max-width: 90vw;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+
+<!-- 배너 -->
+<div id="banner" class="banner" role="alert" aria-live="polite"></div>
+
+<div class="container">
+  <!-- 헤더 -->
+  <div class="header">
+    <div>
+      <div class="header-title">환율 대시보드</div>
+      <div class="update-info" id="update-info">불러오는 중...</div>
+    </div>
+    <button class="refresh-btn" id="refresh-btn" onclick="refreshAll()" aria-label="환율 새로고침">
+      <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"></polyline>
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+      </svg>
+      새로고침
+    </button>
+  </div>
+
+  <!-- 환율 카드 -->
+  <div class="cards-grid" id="cards-grid">
+    <div class="currency-card loading" id="card-USD">
+      <div class="card-top">
+        <div class="card-currency">
+          <span class="flag">🇺🇸</span>
+          <div><div class="currency-code">USD</div><div class="currency-name">미국 달러</div></div>
+        </div>
+      </div>
+      <div class="skeleton skeleton-rate"></div>
+      <div class="skeleton skeleton-bar"></div>
+      <div class="skeleton skeleton-text"></div>
+    </div>
+    <div class="currency-card loading" id="card-JPY">
+      <div class="card-top">
+        <div class="card-currency">
+          <span class="flag">🇯🇵</span>
+          <div><div class="currency-code">JPY</div><div class="currency-name">일본 엔화</div></div>
+        </div>
+      </div>
+      <div class="skeleton skeleton-rate"></div>
+      <div class="skeleton skeleton-bar"></div>
+      <div class="skeleton skeleton-text"></div>
+    </div>
+    <div class="currency-card loading" id="card-CNY">
+      <div class="card-top">
+        <div class="card-currency">
+          <span class="flag">🇨🇳</span>
+          <div><div class="currency-code">CNY</div><div class="currency-name">중국 위안화</div></div>
+        </div>
+      </div>
+      <div class="skeleton skeleton-rate"></div>
+      <div class="skeleton skeleton-bar"></div>
+      <div class="skeleton skeleton-text"></div>
+    </div>
+  </div>
+
+  <!-- 그래프 -->
+  <div class="chart-section">
+    <div class="chart-header">
+      <div class="chart-title">환율 트렌드</div>
+      <div class="period-tabs" role="tablist">
+        <button class="period-tab" role="tab" data-period="7d" onclick="changePeriod('7d', this)">1주</button>
+        <button class="period-tab active" role="tab" data-period="1mo" onclick="changePeriod('1mo', this)" aria-selected="true">1개월</button>
+        <button class="period-tab" role="tab" data-period="3mo" onclick="changePeriod('3mo', this)">3개월</button>
+        <button class="period-tab" role="tab" data-period="6mo" onclick="changePeriod('6mo', this)">6개월</button>
+        <button class="period-tab" role="tab" data-period="1y" onclick="changePeriod('1y', this)">1년</button>
+      </div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="rateChart"></canvas>
+      <div class="chart-error" id="chart-error">그래프를 불러오지 못했습니다. 새로고침해 주세요.</div>
+    </div>
+    <div class="chart-source">Yahoo Finance (FX 시장 기준)</div>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+<script>
+const CURRENCIES = [
+  { code: 'USD', symbol: 'USDKRW=X', flag: '🇺🇸', name: '미국 달러', unit: '원/달러' },
+  { code: 'JPY', symbol: 'JPYKRW=X', flag: '🇯🇵', name: '일본 엔화', unit: '원/엔' },
+  { code: 'CNY', symbol: 'CNYKRW=X', flag: '🇨🇳', name: '중국 위안화', unit: '원/위안' },
+];
+
+const CHART_COLORS = { USD: '#2563EB', JPY: '#D97706', CNY: '#DC2626' };
+// Netlify 함수 경로 (배포 시) / 로컬 테스트 시 직접 Yahoo Finance로 폴백
+const API_BASE = '/.netlify/functions/rates';
+
+let historicalData = {};
+let chart = null;
+let currentPeriod = '1mo';
+let toastTimer = null;
+
+// ─── 유틸 ─────────────────────────────────────────────
+function fmt(n, decimals = 2) {
+  if (n == null) return '--';
+  return n.toLocaleString('ko-KR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function fmtDate(ts) {
+  return new Date(ts * 1000).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+function setBanner(type, msg) {
+  const b = document.getElementById('banner');
+  b.className = `banner ${type} visible`;
+  b.textContent = msg;
+}
+function clearBanner() {
+  document.getElementById('banner').className = 'banner';
+}
+
+// ─── API fetch (Netlify 함수 경유) ────────────────────
+async function fetchCurrentRates() {
+  const res = await fetch(`${API_BASE}?type=current`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error);
+  // symbol → code 매핑
+  return json.data.map(d => ({
+    ...d,
+    code: CURRENCIES.find(c => c.symbol === d.symbol)?.code,
+  }));
+}
+
+async function fetchHistoricalRates(range = '1y') {
+  const res = await fetch(`${API_BASE}?type=history&range=${range}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error);
+  const result = {};
+  json.data.forEach(d => {
+    const code = CURRENCIES.find(c => c.symbol === d.symbol)?.code;
+    if (code) result[code] = d.data;
+  });
+  return result;
+}
+
+// ─── 카드 렌더 ────────────────────────────────────────
+function renderCard(code, meta, stats) {
+  const cur = CURRENCIES.find(c => c.code === code);
+  const card = document.getElementById(`card-${code}`);
+
+  const rate = meta.regularMarketPrice;
+  const prev = meta.chartPreviousClose;
+  const change = rate - prev;
+  const changePct = (change / prev) * 100;
+
+  const isRise = change > 0.001;
+  const isFall = change < -0.001;
+  const changeClass = isRise ? 'rise' : isFall ? 'fall' : 'neutral';
+  const arrow = isRise ? '▲' : isFall ? '▼' : '─';
+  const changeColor = isRise ? 'var(--rise)' : isFall ? 'var(--fall)' : 'var(--neutral)';
+
+  let rangeHtml = '';
+  if (stats) {
+    const { low, high, avg, pos } = stats;
+    const fillColor = avg != null
+      ? (rate < avg ? 'var(--cheap)' : 'var(--expensive)')
+      : 'var(--neutral)';
+    let comment = '';
+    if (avg != null) {
+      const isCheap = rate < avg;
+      const diff = Math.abs(rate - avg).toFixed(2);
+      comment = isCheap
+        ? `최근 1년 평균(${fmt(avg)}원)보다 ${diff}원 저렴한 구간이에요.`
+        : `최근 1년 평균(${fmt(avg)}원)보다 ${diff}원 비싼 구간이에요.`;
+    }
+
+    rangeHtml = `
+      <div class="range-section">
+        <div class="range-labels">
+          <span>${fmt(low)}</span>
+          <span>52주 레인지</span>
+          <span>${fmt(high)}</span>
+        </div>
+        <div class="range-track" role="progressbar" aria-valuenow="${Math.round(pos)}" aria-valuemin="0" aria-valuemax="100">
+          <div class="range-fill" style="width:${pos}%;background:${fillColor}"></div>
+          <div class="range-marker" style="left:${pos}%;background:${fillColor}"></div>
+        </div>
+        ${comment ? `<div class="range-comment">${comment}</div>` : ''}
+      </div>`;
+  } else {
+    rangeHtml = `<div class="range-section"><div class="range-placeholder">레인지 정보를 불러오지 못했습니다</div></div>`;
+  }
+
+  const decimals = code === 'JPY' ? 3 : 2;
+
+  card.classList.remove('loading');
+  card.innerHTML = `
+    <div class="card-top">
+      <div class="card-currency">
+        <span class="flag">${cur.flag}</span>
+        <div>
+          <div class="currency-code">${cur.code}</div>
+          <div class="currency-name">${cur.name}</div>
+        </div>
+      </div>
+      <div class="change-badge ${changeClass}">
+        ${arrow} ${fmt(Math.abs(change), decimals)} (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)
+      </div>
+    </div>
+    <div class="card-rate">${fmt(rate, decimals)}</div>
+    <div class="card-rate-unit">${cur.unit}</div>
+    ${rangeHtml}
+    <div class="card-footer">
+      <div class="card-source">Yahoo Finance · FX 시장 기준</div>
+      <div class="card-disclaimer">실제 환전 시 은행 스프레드 별도</div>
+    </div>`;
+}
+
+// ─── 레인지 계산 ──────────────────────────────────────
+// 52주 범위는 Yahoo Finance meta 값 사용 (CNY도 포함), avg는 충분한 historical data 있을 때만
+function calcStats(code, currentRate, w52) {
+  const low = w52?.fiftyTwoWeekLow;
+  const high = w52?.fiftyTwoWeekHigh;
+  if (!low || !high || low >= high) return null;
+
+  const pos = ((currentRate - low) / (high - low)) * 100;
+
+  const data = historicalData[code];
+  const avg = (data && data.length >= 30)
+    ? data.map(d => d.close).reduce((a, b) => a + b, 0) / data.length
+    : null;
+
+  return { low, high, avg, pos: Math.max(0, Math.min(100, pos)) };
+}
+
+// ─── 차트 ─────────────────────────────────────────────
+function filterByPeriod(data, period) {
+  const now = Date.now() / 1000;
+  const days = { '7d': 7, '1mo': 30, '3mo': 90, '6mo': 180, '1y': 365 };
+  const cutoff = now - (days[period] || 365) * 86400;
+  return data.filter(d => d.ts >= cutoff);
+}
+
+function updateChart() {
+  const chartEl = document.getElementById('rateChart');
+  const errorEl = document.getElementById('chart-error');
+
+  if (Object.keys(historicalData).length === 0) {
+    chartEl.style.display = 'none';
+    errorEl.style.display = 'block';
+    return;
+  }
+  chartEl.style.display = 'block';
+  errorEl.style.display = 'none';
+
+  const datasets = CURRENCIES.map(cur => {
+    const filtered = filterByPeriod(historicalData[cur.code] || [], currentPeriod);
+    return {
+      label: cur.code,
+      data: filtered.map(d => ({ x: d.ts * 1000, y: d.close })),
+      borderColor: CHART_COLORS[cur.code],
+      backgroundColor: CHART_COLORS[cur.code] + '18',
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.3,
+      fill: false,
+    };
+  });
+
+  if (chart) {
+    chart.data.datasets = datasets;
+    chart.update('active');
+    return;
+  }
+
+  chart = new Chart(chartEl, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 12 }, boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            title: items => new Date(items[0].parsed.x).toLocaleDateString('ko-KR'),
+            label: item => ` ${item.dataset.label}: ${fmt(item.parsed.y)}원`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'time',
+          time: { tooltipFormat: 'yyyy.MM.dd' },
+          ticks: { maxTicksLimit: 6, font: { size: 11 }, color: '#9CA3AF' },
+          grid: { display: false },
+        },
+        y: {
+          ticks: { font: { size: 11 }, color: '#9CA3AF', callback: v => fmt(v) + '원' },
+          grid: { color: '#F3F4F6' },
+        }
+      }
+    }
+  });
+}
+
+function changePeriod(period, btn) {
+  currentPeriod = period;
+  document.querySelectorAll('.period-tab').forEach(b => {
+    b.classList.remove('active');
+    b.removeAttribute('aria-selected');
+  });
+  btn.classList.add('active');
+  btn.setAttribute('aria-selected', 'true');
+  updateChart();
+}
+
+// ─── 메인 로직 ────────────────────────────────────────
+async function loadCurrentRates() {
+  try {
+    const rates = await fetchCurrentRates();
+    rates.forEach(d => {
+      if (!d.code) return;
+      const meta = {
+        regularMarketPrice: d.rate,
+        chartPreviousClose: d.prevClose,
+        fiftyTwoWeekHigh: d.high52w,
+        fiftyTwoWeekLow: d.low52w,
+        regularMarketTime: d.updatedAt,
+      };
+      const stats = calcStats(d.code, d.rate, { fiftyTwoWeekLow: d.low52w, fiftyTwoWeekHigh: d.high52w });
+      renderCard(d.code, meta, stats);
+    });
+    const updatedAt = fmtDate(rates[0].updatedAt);
+    document.getElementById('update-info').textContent = `Yahoo Finance 기준 · ${updatedAt} 업데이트`;
+    clearBanner();
+  } catch (err) {
+    console.error('현재 환율 로드 실패:', err);
+    showToast('업데이트 실패 · 이전 데이터를 표시합니다');
+  }
+}
+
+async function loadHistoricalData() {
+  try {
+    const data = await fetchHistoricalRates('1y');
+    historicalData = data;
+  } catch (err) {
+    console.warn('과거 데이터 로드 실패:', err);
+  }
+  updateChart();
+}
+
+async function refreshAll() {
+  const btn = document.getElementById('refresh-btn');
+  btn.classList.add('loading');
+  btn.disabled = true;
+
+  try {
+    await Promise.all([loadCurrentRates(), loadHistoricalData()]);
+  } finally {
+    btn.classList.remove('loading');
+    btn.disabled = false;
+  }
+}
+
+// ─── Service Worker 등록 ─────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
+// ─── 오프라인 감지 ────────────────────────────────────
+window.addEventListener('offline', () => {
+  setBanner('offline', '오프라인 상태 · 마지막으로 불러온 데이터를 표시 중입니다');
+});
+window.addEventListener('online', () => {
+  clearBanner();
+  refreshAll();
+});
+
+// ─── 초기화 ───────────────────────────────────────────
+(async () => {
+  if (!navigator.onLine) {
+    setBanner('offline', '오프라인 상태 · 마지막으로 불러온 데이터를 표시 중입니다');
+    return;
+  }
+  // 현재 환율 + 과거 데이터 병렬 로드
+  await loadHistoricalData();  // 먼저 로드해서 카드 렌더 시 stats 계산 가능하게
+  await loadCurrentRates();
+})();
+</script>
+</body>
+</html>
