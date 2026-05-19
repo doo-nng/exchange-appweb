@@ -339,8 +339,11 @@
         </div>
       </div>
       <div class="skeleton skeleton-rate"></div>
+      <div class="skeleton-badges">
+        <div class="skeleton skeleton-badge"></div>
+        <div class="skeleton skeleton-badge"></div>
+      </div>
       <div class="skeleton skeleton-bar"></div>
-      <div class="skeleton skeleton-text"></div>
     </div>
     <div class="currency-card loading" id="card-JPY">
       <div class="card-top">
@@ -350,8 +353,11 @@
         </div>
       </div>
       <div class="skeleton skeleton-rate"></div>
+      <div class="skeleton-badges">
+        <div class="skeleton skeleton-badge"></div>
+        <div class="skeleton skeleton-badge"></div>
+      </div>
       <div class="skeleton skeleton-bar"></div>
-      <div class="skeleton skeleton-text"></div>
     </div>
     <div class="currency-card loading" id="card-CNY">
       <div class="card-top">
@@ -361,8 +367,11 @@
         </div>
       </div>
       <div class="skeleton skeleton-rate"></div>
+      <div class="skeleton-badges">
+        <div class="skeleton skeleton-badge"></div>
+        <div class="skeleton skeleton-badge"></div>
+      </div>
       <div class="skeleton skeleton-bar"></div>
-      <div class="skeleton skeleton-text"></div>
     </div>
   </div>
 
@@ -472,9 +481,6 @@ function renderCard(code, meta, stats) {
 
   const isRise = change > 0.001;
   const isFall = change < -0.001;
-  const changeClass = isRise ? 'rise' : isFall ? 'fall' : 'neutral';
-  const arrow = isRise ? '▲' : isFall ? '▼' : '─';
-  const changeColor = isRise ? 'var(--rise)' : isFall ? 'var(--fall)' : 'var(--neutral)';
 
   let rangeHtml = '';
   if (stats) {
@@ -482,14 +488,6 @@ function renderCard(code, meta, stats) {
     const fillColor = avg != null
       ? (rate < avg ? 'var(--cheap)' : 'var(--expensive)')
       : 'var(--neutral)';
-    let comment = '';
-    if (avg != null) {
-      const isCheap = rate < avg;
-      const diff = Math.abs(rate - avg).toFixed(2);
-      comment = isCheap
-        ? `최근 1년 평균(${fmt(avg)}원)보다 ${diff}원 저렴한 구간이에요.`
-        : `최근 1년 평균(${fmt(avg)}원)보다 ${diff}원 비싼 구간이에요.`;
-    }
 
     rangeHtml = `
       <div class="range-section">
@@ -502,13 +500,37 @@ function renderCard(code, meta, stats) {
           <div class="range-fill" style="width:${pos}%;background:${fillColor}"></div>
           <div class="range-marker" style="left:${pos}%;background:${fillColor}"></div>
         </div>
-        ${comment ? `<div class="range-comment">${comment}</div>` : ''}
       </div>`;
   } else {
     rangeHtml = `<div class="range-section"><div class="range-placeholder">레인지 정보를 불러오지 못했습니다</div></div>`;
   }
 
   const decimals = code === 'JPY' ? 3 : 2;
+
+  // 전일 대비 배지
+  const dayBadgeClass = isRise ? 'rise' : isFall ? 'fall' : 'neutral';
+  const daySign = isRise ? '▲' : isFall ? '▼' : '─';
+  const dayBadgeHtml = `
+    <div class="stat-badge-block">
+      <span class="badge-label">전일 대비</span>
+      <span class="stat-badge ${dayBadgeClass}">${daySign} ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%</span>
+    </div>`;
+
+  // 1년 평균 대비 배지 (데이터 충분할 때만)
+  let avgBadgeHtml = '';
+  if (stats && stats.avg != null) {
+    const isCheap = rate < stats.avg;
+    const diffDecimals = code === 'JPY' ? 3 : 2;
+    const diff = Math.abs(rate - stats.avg).toFixed(diffDecimals);
+    const avgClass = isCheap ? 'cheap' : 'exp';
+    const avgArrow = isCheap ? '▼' : '▲';
+    const avgLabel = isCheap ? '저렴' : '비쌈';
+    avgBadgeHtml = `
+      <div class="stat-badge-block">
+        <span class="badge-label">1년 평균 대비</span>
+        <span class="stat-badge ${avgClass}">${avgArrow} ${diff}원 ${avgLabel}</span>
+      </div>`;
+  }
 
   card.classList.remove('loading');
   card.innerHTML = `
@@ -520,12 +542,13 @@ function renderCard(code, meta, stats) {
           <div class="currency-name">${cur.name}</div>
         </div>
       </div>
-      <div class="change-badge ${changeClass}">
-        ${arrow} ${fmt(Math.abs(change), decimals)} (${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%)
-      </div>
     </div>
     <div class="card-rate">${fmt(rate, decimals)}</div>
     <div class="card-rate-unit">${cur.unit}</div>
+    <div class="stat-badges">
+      ${dayBadgeHtml}
+      ${avgBadgeHtml}
+    </div>
     ${rangeHtml}
     <div class="card-footer">
       <div class="card-source">Yahoo Finance · FX 시장 기준</div>
