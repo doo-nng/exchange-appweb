@@ -380,6 +380,8 @@ const CHART_COLORS = { USD: '#2563EB', JPY: '#D97706', CNY: '#DC2626' };
 const API_BASE = '/.netlify/functions/rates';
 
 let historicalData = {};
+let currentRates = {};   // { USD: 1380.5, JPY: 9.12, CNY: 190.3 }
+let isCalcOpen = false;
 let chart = null;
 let currentPeriod = '1mo';
 let toastTimer = null;
@@ -635,6 +637,7 @@ async function loadCurrentRates() {
       };
       const stats = calcStats(d.code, d.rate, { fiftyTwoWeekLow: d.low52w, fiftyTwoWeekHigh: d.high52w });
       renderCard(d.code, meta, stats);
+      currentRates[d.code] = d.rate;
     });
     const updatedAt = fmtDate(rates[0].updatedAt);
     document.getElementById('update-info').textContent = `Yahoo Finance 기준 · ${updatedAt} 업데이트`;
