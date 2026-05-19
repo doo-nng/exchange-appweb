@@ -800,10 +800,8 @@ function updateChart() {
   };
 
   if (chart) {
-    chart.data.datasets = datasets;
-    chart.options = chartOptions;
-    chart.update('active');
-    return;
+    chart.destroy();
+    chart = null;
   }
 
   chart = new Chart(chartEl, { type: 'line', data: { datasets }, options: chartOptions });
