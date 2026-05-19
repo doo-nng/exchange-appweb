@@ -560,10 +560,12 @@ function updateChart() {
       borderColor: CHART_COLORS[cur.code],
       borderWidth: 2,
       pointRadius: 0,
-      pointHoverRadius: 4,
+      pointBorderWidth: 0,
+      pointHoverRadius: 5,
       pointHoverBackgroundColor: CHART_COLORS[cur.code],
       tension: 0.3,
       fill: false,
+      baseRate: base,
     };
   }).filter(Boolean);
 
@@ -577,8 +579,13 @@ function updateChart() {
         callbacks: {
           title: items => new Date(items[0].parsed.x).toLocaleDateString('ko-KR'),
           label: item => {
-            const v = item.parsed.y;
-            return ` ${item.dataset.label}: ${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+            const pct = item.parsed.y;
+            const base = item.dataset.baseRate;
+            const code = item.dataset.label;
+            const decimals = code === 'JPY' ? 3 : 2;
+            const actualRate = base * (1 + pct / 100);
+            const sign = pct >= 0 ? '+' : '';
+            return ` ${code}: ${sign}${pct.toFixed(2)}% · ${fmt(actualRate, decimals)}원`;
           },
         }
       }
