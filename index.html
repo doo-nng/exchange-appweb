@@ -306,6 +306,134 @@
       max-width: 90vw;
     }
     .toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* 계산기 FAB */
+    .calc-fab {
+      position: fixed;
+      bottom: 24px;
+      right: 20px;
+      z-index: 200;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: white;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 4px 12px rgba(37,99,235,0.4);
+      transition: background 0.15s, transform 0.15s;
+    }
+    .calc-fab:hover { background: #1D4ED8; }
+    .calc-fab.open { background: #6B7280; }
+
+    /* 계산기 팝오버 */
+    .calc-popover {
+      position: fixed;
+      bottom: 80px;
+      right: 20px;
+      z-index: 201;
+      width: 300px;
+      max-width: calc(100vw - 40px);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      display: none;
+    }
+    .calc-popover.open { display: block; }
+
+    .calc-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+    }
+
+    /* 통화 탭 */
+    .calc-tabs {
+      display: flex;
+      background: var(--bg-base);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+      margin-bottom: 14px;
+    }
+    .calc-tab {
+      flex: 1;
+      padding: 5px 0;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      border: none;
+      background: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+    .calc-tab.active { background: var(--accent); color: white; }
+
+    /* 입력 필드 행 */
+    .calc-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .calc-field-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .calc-input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      background: var(--bg-base);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .calc-input:focus { border-color: var(--accent); background: white; }
+    .calc-input[readonly] { color: var(--text-secondary); font-weight: 500; }
+
+    /* 스왑 버튼 */
+    .calc-swap {
+      display: flex;
+      justify-content: center;
+      margin: 6px 0;
+    }
+    .calc-swap-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px 14px;
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: background 0.1s;
+    }
+    .calc-swap-btn:hover { background: var(--bg-base); }
+
+    .calc-notice {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-align: center;
+      margin-top: 8px;
+    }
+    .calc-loading {
+      font-size: 12px;
+      color: var(--text-secondary);
+      text-align: center;
+      padding: 16px 0;
+    }
   </style>
 </head>
 <body>
@@ -397,6 +525,22 @@
 
 <!-- 토스트 -->
 <div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+<!-- 계산기 FAB -->
+<button class="calc-fab" id="calc-fab" aria-label="환전 계산기 열기">💱</button>
+
+<!-- 계산기 팝오버 -->
+<div class="calc-popover" id="calc-popover" role="dialog" aria-label="환전 계산기">
+  <div class="calc-title">💱 환전 계산기</div>
+  <div class="calc-tabs" role="tablist">
+    <button class="calc-tab active" role="tab" data-code="USD" onclick="calcSelectTab(this)">USD</button>
+    <button class="calc-tab" role="tab" data-code="JPY" onclick="calcSelectTab(this)">JPY</button>
+    <button class="calc-tab" role="tab" data-code="CNY" onclick="calcSelectTab(this)">CNY</button>
+  </div>
+  <div id="calc-body">
+    <!-- JS로 채움 -->
+  </div>
+</div>
 
 <script>
 const CURRENCIES = [
