@@ -1,14 +1,12 @@
 const CACHE = 'exchange-v4';
-const STATIC = [
-  '/',
-  '/index.html',
+const STATIC_ASSETS = [
   '/manifest.json',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
 ];
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting())
+    caches.open(CACHE).then(c => c.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
   );
 });
 
@@ -37,7 +35,21 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // 정적 자산: cache-first
+  // HTML 문서(navigate 요청): network-first — 배포 즉시 최신 버전 반영, 오프라인 시 캐시 폴백
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // CDN 정적 자산(JS 라이브러리 등): cache-first — 버전 고정 URL이므로 안전
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );
