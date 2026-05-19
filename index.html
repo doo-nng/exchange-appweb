@@ -965,6 +965,7 @@ function recalcCalc() {
 }
 
 function swapCalcDirection() {
+  const oldDir = calcDirection;
   calcDirection = calcDirection === 'krw' ? 'foreign' : 'krw';
   const krwVal = document.getElementById('calc-krw')?.value || '';
   const foreignVal = document.getElementById('calc-foreign')?.value || '';
@@ -972,7 +973,7 @@ function swapCalcDirection() {
   const newInput = calcDirection === 'krw'
     ? document.getElementById('calc-krw')
     : document.getElementById('calc-foreign');
-  const prevOutput = calcDirection === 'krw' ? foreignVal : krwVal;
+  const prevOutput = oldDir === 'krw' ? foreignVal : krwVal;
   if (newInput) {
     newInput.value = prevOutput.replace(/,/g, '');
     newInput.focus();
