@@ -120,18 +120,6 @@
     .currency-code { font-size: 16px; font-weight: 700; }
     .currency-name { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
 
-    .change-badge {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 3px 7px;
-      border-radius: 6px;
-    }
-    .change-badge.rise { color: var(--rise); background: #FEF2F2; }
-    .change-badge.fall { color: var(--fall); background: #EFF6FF; }
-    .change-badge.neutral { color: var(--neutral); background: #F9FAFB; }
 
     .card-rate {
       font-size: 30px;
@@ -140,6 +128,39 @@
       margin-bottom: 2px;
     }
     .card-rate-unit { font-size: 13px; color: var(--text-secondary); margin-bottom: 14px; }
+
+    /* 배지 2개 행 */
+    .stat-badges {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .stat-badge-block {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .badge-label {
+      font-size: 10px;
+      color: var(--text-tertiary);
+    }
+    .stat-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+    .stat-badge.rise  { color: var(--rise); background: #FEF2F2; }
+    .stat-badge.fall  { color: var(--fall); background: #EFF6FF; }
+    .stat-badge.cheap { color: var(--fall); background: #EFF6FF; }
+    .stat-badge.exp   { color: var(--rise); background: #FEF2F2; }
+    .stat-badge.neutral { color: var(--neutral); background: #F9FAFB; }
+    /* skeleton용 */
+    .skeleton-badges { display: flex; gap: 10px; margin-bottom: 14px; }
+    .skeleton-badge  { height: 24px; width: 80px; }
 
     /* 레인지 바 */
     .range-section { margin-bottom: 12px; }
