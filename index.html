@@ -885,8 +885,7 @@ window.addEventListener('online', () => {
 });
 
 // ─── 계산기 ──────────────────────────────────────────
-let calcActiveCode = 'USD';  // 현재 선택 통화
-let calcDirection = 'krw';   // 'krw': 원화→외화 / 'foreign': 외화→원화
+let calcActiveCode = 'USD';
 
 const CALC_DECIMALS = { USD: 2, JPY: 0, CNY: 2 };
 const CALC_UNIT = { USD: '달러', JPY: '엔', CNY: '위안' };
@@ -894,7 +893,6 @@ const CALC_UNIT = { USD: '달러', JPY: '엔', CNY: '위안' };
 function getCalcRate(code) {
   const rate = currentRates[code];
   if (!rate) return null;
-  // JPY: 고시는 100엔 기준 → 1엔 기준으로 변환
   return code === 'JPY' ? rate / 100 : rate;
 }
 
@@ -912,7 +910,7 @@ function calcConvert(inputVal, fromKrw) {
   }
 }
 
-function renderCalcBody() {
+function renderCalcBody(krwVal, foreignVal) {
   const body = document.getElementById('calc-body');
   const rate = getCalcRate(calcActiveCode);
   if (!rate) {
@@ -920,65 +918,72 @@ function renderCalcBody() {
     return;
   }
   const unit = CALC_UNIT[calcActiveCode];
-  const krwIsInput = calcDirection === 'krw';
-
   body.innerHTML = `
     <div class="calc-field">
       <div class="calc-field-label">원화 (KRW)</div>
-      <input class="calc-input" id="calc-krw" type="text" inputmode="decimal"
-        placeholder="0" ${krwIsInput ? '' : 'readonly'}
-        oninput="onCalcInput('krw')" value="" />
+      <input class="calc-input" id="calc-krw" type="text" inputmode="numeric"
+        placeholder="0" oninput="onCalcInput('krw')" value="${krwVal || ''}" />
     </div>
     <div class="calc-swap">
-      <button class="calc-swap-btn" onclick="swapCalcDirection()" aria-label="입력 방향 전환">⇄</button>
+      <button class="calc-swap-btn" onclick="event.stopPropagation(); swapCalcDirection()" aria-label="입력 방향 전환">⇄</button>
     </div>
     <div class="calc-field">
       <div class="calc-field-label">${calcActiveCode} (${unit})</div>
       <input class="calc-input" id="calc-foreign" type="text" inputmode="decimal"
-        placeholder="0" ${krwIsInput ? 'readonly' : ''}
-        oninput="onCalcInput('foreign')" value="" />
+        placeholder="0" oninput="onCalcInput('foreign')" value="${foreignVal || ''}" />
     </div>
     <div class="calc-notice">Yahoo Finance 기준 · 실제 환전 시 스프레드 별도</div>
   `;
 }
 
 function onCalcInput(from) {
-  const fromKrw = from === 'krw';
-  const srcEl = document.getElementById(fromKrw ? 'calc-krw' : 'calc-foreign');
-  const dstEl = document.getElementById(fromKrw ? 'calc-foreign' : 'calc-krw');
-  const raw = srcEl.value.replace(/[^0-9.]/g, '');
-  srcEl.value = raw;
-  const num = parseFloat(raw);
-  dstEl.value = raw === '' ? '' : calcConvert(num, fromKrw);
+  if (from === 'krw') {
+    const el = document.getElementById('calc-krw');
+    const dstEl = document.getElementById('calc-foreign');
+    const raw = el.value.replace(/[^0-9]/g, '');
+    const formatted = raw ? Number(raw).toLocaleString('ko-KR') : '';
+    el.value = formatted;
+    el.setSelectionRange(formatted.length, formatted.length);
+    dstEl.value = raw ? calcConvert(Number(raw), true) : '';
+  } else {
+    const el = document.getElementById('calc-foreign');
+    const dstEl = document.getElementById('calc-krw');
+    const raw = el.value.replace(/[^0-9.]/g, '');
+    el.value = raw;
+    const num = parseFloat(raw);
+    const krwResult = raw ? calcConvert(num, false) : '';
+    dstEl.value = krwResult;
+  }
 }
 
 function recalcCalc() {
   const krwEl = document.getElementById('calc-krw');
   const foreignEl = document.getElementById('calc-foreign');
   if (!krwEl || !foreignEl) return;
-  const fromKrw = calcDirection === 'krw';
-  const srcEl = fromKrw ? krwEl : foreignEl;
-  const dstEl = fromKrw ? foreignEl : krwEl;
-  const num = parseFloat(srcEl.value.replace(/[^0-9.]/g, ''));
-  if (!isNaN(num) && srcEl.value !== '') {
-    dstEl.value = calcConvert(num, fromKrw);
+  const krwRaw = krwEl.value.replace(/[^0-9]/g, '');
+  const foreignRaw = foreignEl.value.replace(/[^0-9.]/g, '');
+  if (krwRaw) {
+    foreignEl.value = calcConvert(Number(krwRaw), true);
+  } else if (foreignRaw) {
+    krwEl.value = calcConvert(parseFloat(foreignRaw), false);
   }
 }
 
 function swapCalcDirection() {
-  const oldDir = calcDirection;
-  calcDirection = calcDirection === 'krw' ? 'foreign' : 'krw';
-  const krwVal = document.getElementById('calc-krw')?.value || '';
-  const foreignVal = document.getElementById('calc-foreign')?.value || '';
-  renderCalcBody();
-  const newInput = calcDirection === 'krw'
-    ? document.getElementById('calc-krw')
-    : document.getElementById('calc-foreign');
-  const prevOutput = oldDir === 'krw' ? foreignVal : krwVal;
-  if (newInput) {
-    newInput.value = prevOutput.replace(/,/g, '');
-    newInput.focus();
-    onCalcInput(calcDirection);
+  const krwRaw = (document.getElementById('calc-krw')?.value || '').replace(/[^0-9]/g, '');
+  const foreignRaw = (document.getElementById('calc-foreign')?.value || '').replace(/[^0-9.]/g, '');
+  // 외화값을 새 입력 기준으로: 외화 → KRW 재계산
+  if (foreignRaw) {
+    const krwResult = calcConvert(parseFloat(foreignRaw), false);
+    renderCalcBody(krwResult, foreignRaw);
+    document.getElementById('calc-foreign')?.focus();
+  } else if (krwRaw) {
+    const foreignResult = calcConvert(Number(krwRaw), true);
+    renderCalcBody(Number(krwRaw).toLocaleString('ko-KR'), foreignResult);
+    document.getElementById('calc-krw')?.focus();
+  } else {
+    renderCalcBody('', '');
+    document.getElementById('calc-krw')?.focus();
   }
 }
 
@@ -990,7 +995,6 @@ function calcSelectTab(btn) {
   btn.classList.add('active');
   btn.setAttribute('aria-selected', 'true');
   calcActiveCode = btn.dataset.code;
-  calcDirection = 'krw';
   renderCalcBody();
 }
 
