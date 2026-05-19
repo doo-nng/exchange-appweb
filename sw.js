@@ -1,4 +1,4 @@
-const CACHE = 'exchange-v2';
+const CACHE = 'exchange-v3';
 const STATIC = [
   '/',
   '/index.html',
