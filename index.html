@@ -308,6 +308,14 @@
     .toast.show { transform: translateX(-50%) translateY(0); }
 
     /* 계산기 FAB */
+    #calc-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 199;
+    }
+    #calc-overlay.open { display: block; }
+
     .calc-fab {
       position: fixed;
       bottom: 24px;
@@ -404,24 +412,17 @@
     .calc-input:focus { border-color: var(--accent); background: white; }
     .calc-input[readonly] { color: var(--text-secondary); font-weight: 500; }
 
-    /* 스왑 버튼 */
-    .calc-swap {
-      display: flex;
-      justify-content: center;
-      margin: 6px 0;
+    .calc-divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 10px 0;
     }
-    .calc-swap-btn {
-      background: none;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 4px 14px;
-      font-size: 14px;
-      cursor: pointer;
-      color: var(--text-secondary);
-      transition: background 0.1s;
+    .calc-rate-info {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      text-align: center;
+      margin-top: 4px;
     }
-    .calc-swap-btn:hover { background: var(--bg-base); }
-
     .calc-notice {
       font-size: 11px;
       color: var(--text-tertiary);
@@ -526,12 +527,15 @@
 <!-- 토스트 -->
 <div class="toast" id="toast" role="alert" aria-live="polite"></div>
 
+<!-- 계산기 외부 오버레이 (팝오버 열릴 때 표시, 클릭 시 닫기) -->
+<div id="calc-overlay" onclick="closeCalc()"></div>
+
 <!-- 계산기 FAB -->
-<button class="calc-fab" id="calc-fab" aria-label="환전 계산기 열기">💱</button>
+<button class="calc-fab" id="calc-fab" aria-label="환율 계산기 열기">💱</button>
 
 <!-- 계산기 팝오버 -->
-<div class="calc-popover" id="calc-popover" role="dialog" aria-label="환전 계산기">
-  <div class="calc-title">💱 환전 계산기</div>
+<div class="calc-popover" id="calc-popover" role="dialog" aria-label="환율 계산기">
+  <div class="calc-title">💱 환율 계산기</div>
   <div class="calc-tabs" role="tablist">
     <button class="calc-tab active" role="tab" data-code="USD" aria-selected="true" onclick="calcSelectTab(this)">USD</button>
     <button class="calc-tab" role="tab" data-code="JPY" aria-selected="false" onclick="calcSelectTab(this)">JPY</button>
@@ -554,7 +558,8 @@ const CHART_COLORS = { USD: '#2563EB', JPY: '#D97706', CNY: '#DC2626' };
 const API_BASE = '/.netlify/functions/rates';
 
 let historicalData = {};
-let currentRates = {};   // { USD: 1380.5, JPY: 9.12, CNY: 190.3 }
+let currentRates = {};
+let ratesUpdatedAt = null;
 let isCalcOpen = false;
 let chart = null;
 let currentPeriod = '1mo';
@@ -835,6 +840,7 @@ async function loadCurrentRates() {
       renderCard(d.code, meta, stats);
       currentRates[d.code] = d.rate;
     });
+    ratesUpdatedAt = rates[0].updatedAt;
     const updatedAt = fmtDate(rates[0].updatedAt);
     document.getElementById('update-info').textContent = `Yahoo Finance 기준 · ${updatedAt} 업데이트`;
     clearBanner();
@@ -892,8 +898,7 @@ const CALC_UNIT = { USD: '달러', JPY: '엔', CNY: '위안' };
 
 function getCalcRate(code) {
   const rate = currentRates[code];
-  if (!rate) return null;
-  return code === 'JPY' ? rate / 100 : rate;
+  return rate || null;
 }
 
 function calcConvert(inputVal, fromKrw) {
@@ -918,21 +923,25 @@ function renderCalcBody(krwVal, foreignVal) {
     return;
   }
   const unit = CALC_UNIT[calcActiveCode];
+  const decimals = CALC_DECIMALS[calcActiveCode];
+  const rateStr = rate.toLocaleString('ko-KR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const dateStr = ratesUpdatedAt
+    ? new Date(ratesUpdatedAt * 1000).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' }) + ' 기준'
+    : 'Yahoo Finance 기준';
   body.innerHTML = `
     <div class="calc-field">
       <div class="calc-field-label">원화 (KRW)</div>
       <input class="calc-input" id="calc-krw" type="text" inputmode="numeric"
         placeholder="0" oninput="onCalcInput('krw')" value="${krwVal || ''}" />
     </div>
-    <div class="calc-swap">
-      <button class="calc-swap-btn" onclick="event.stopPropagation(); swapCalcDirection()" aria-label="입력 방향 전환">⇄</button>
-    </div>
-    <div class="calc-field">
+    <div class="calc-field" style="margin-top:10px">
       <div class="calc-field-label">${calcActiveCode} (${unit})</div>
       <input class="calc-input" id="calc-foreign" type="text" inputmode="decimal"
         placeholder="0" oninput="onCalcInput('foreign')" value="${foreignVal || ''}" />
     </div>
-    <div class="calc-notice">Yahoo Finance 기준 · 실제 환전 시 스프레드 별도</div>
+    <hr class="calc-divider" />
+    <div class="calc-rate-info">1 ${calcActiveCode} = ${rateStr}원 · ${dateStr}</div>
+    <div class="calc-notice">실제 환전 시 은행 스프레드 별도</div>
   `;
 }
 
@@ -969,23 +978,6 @@ function recalcCalc() {
   }
 }
 
-function swapCalcDirection() {
-  const krwRaw = (document.getElementById('calc-krw')?.value || '').replace(/[^0-9]/g, '');
-  const foreignRaw = (document.getElementById('calc-foreign')?.value || '').replace(/[^0-9.]/g, '');
-  // 외화값을 새 입력 기준으로: 외화 → KRW 재계산
-  if (foreignRaw) {
-    const krwResult = calcConvert(parseFloat(foreignRaw), false);
-    renderCalcBody(krwResult, foreignRaw);
-    document.getElementById('calc-foreign')?.focus();
-  } else if (krwRaw) {
-    const foreignResult = calcConvert(Number(krwRaw), true);
-    renderCalcBody(Number(krwRaw).toLocaleString('ko-KR'), foreignResult);
-    document.getElementById('calc-krw')?.focus();
-  } else {
-    renderCalcBody('', '');
-    document.getElementById('calc-krw')?.focus();
-  }
-}
 
 function calcSelectTab(btn) {
   document.querySelectorAll('.calc-tab').forEach(b => {
@@ -1001,32 +993,34 @@ function calcSelectTab(btn) {
 function openCalc() {
   const popover = document.getElementById('calc-popover');
   const fab = document.getElementById('calc-fab');
+  const overlay = document.getElementById('calc-overlay');
   isCalcOpen = true;
   popover.classList.add('open');
   fab.classList.add('open');
+  overlay.classList.add('open');
   fab.textContent = '✕';
-  fab.setAttribute('aria-label', '계산기 닫기');
+  fab.setAttribute('aria-label', '환율 계산기 닫기');
   renderCalcBody();
 }
 
 function closeCalc() {
   const popover = document.getElementById('calc-popover');
   const fab = document.getElementById('calc-fab');
+  const overlay = document.getElementById('calc-overlay');
   isCalcOpen = false;
   popover.classList.remove('open');
   fab.classList.remove('open');
+  overlay.classList.remove('open');
   fab.textContent = '💱';
-  fab.setAttribute('aria-label', '환전 계산기 열기');
+  fab.setAttribute('aria-label', '환율 계산기 열기');
 }
 
 document.getElementById('calc-fab').addEventListener('click', () => {
   isCalcOpen ? closeCalc() : openCalc();
 });
 
-document.addEventListener('click', e => {
-  if (isCalcOpen && !e.target.closest('#calc-fab, #calc-popover')) {
-    closeCalc();
-  }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && isCalcOpen) closeCalc();
 });
 
 // ─── 초기화 ───────────────────────────────────────────
