@@ -2,3 +2,9 @@ node_modules/
 package-lock.json
 gen-icons.js
 .superpowers/
+
+# Local Netlify folder
+.netlify
+
+# Git worktrees
+.worktrees/
