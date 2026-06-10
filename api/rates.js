@@ -1,4 +1,4 @@
-// Netlify serverless function — Yahoo Finance 프록시
+// Vercel serverless function — Yahoo Finance 프록시
 // 브라우저 CORS 우회용. 서버에서 Yahoo Finance 호출 후 클라이언트에 반환.
 // Node.js native fetch는 sec-fetch-mode:cors 헤더를 자동 추가해 rate limit 유발 → https 모듈 사용
 
@@ -31,20 +31,17 @@ function httpsGet(path) {
   });
 }
 
-exports.handler = async (event) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET',
-    'Content-Type': 'application/json',
-    'Cache-Control': 'public, max-age=1800', // 30분 캐시
-  };
+module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: corsHeaders, body: '' };
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
   }
 
-  const range = event.queryStringParameters?.range || '1y';
-  const type = event.queryStringParameters?.type || 'current'; // 'current' | 'history'
+  const range = req.query.range || '1y';
+  const type = req.query.type || 'current'; // 'current' | 'history'
 
   try {
     if (type === 'current') {
@@ -62,11 +59,9 @@ exports.handler = async (event) => {
           updatedAt: meta.regularMarketTime,
         };
       });
-      return {
-        statusCode: 200,
-        headers: corsHeaders,
-        body: JSON.stringify({ ok: true, data: results }),
-      };
+      res.setHeader('Cache-Control', 'public, max-age=1800'); // 30분 캐시
+      res.status(200).json({ ok: true, data: results });
+      return;
     }
 
     if (type === 'history') {
@@ -106,21 +101,15 @@ exports.handler = async (event) => {
         { symbol: 'JPYKRW=X', data: jpykrw },
         { symbol: 'CNYKRW=X', data: cnykrw },
       ];
-      return {
-        statusCode: 200,
-        headers: { ...corsHeaders, 'Cache-Control': 'public, max-age=43200' },
-        body: JSON.stringify({ ok: true, data: results }),
-      };
+      res.setHeader('Cache-Control', 'public, max-age=43200');
+      res.status(200).json({ ok: true, data: results });
+      return;
     }
 
-    return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: 'invalid type' }) };
+    res.status(400).json({ error: 'invalid type' });
 
   } catch (err) {
     console.error('rates function error:', err);
-    return {
-      statusCode: 502,
-      headers: corsHeaders,
-      body: JSON.stringify({ ok: false, error: err.message }),
-    };
+    res.status(502).json({ ok: false, error: err.message });
   }
 };

@@ -8,3 +8,4 @@ gen-icons.js
 
 # Git worktrees
 .worktrees/
+.vercel

@@ -1,4 +1,4 @@
-const CACHE = 'exchange-v4';
+const CACHE = 'exchange-v5';
 const STATIC_ASSETS = [
   '/manifest.json',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
@@ -22,7 +22,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
   // API 요청: network-first (실패 시 캐시)
-  if (url.pathname.startsWith('/.netlify/functions/')) {
+  if (url.pathname.startsWith('/api/')) {
     e.respondWith(
       fetch(e.request)
         .then(res => {

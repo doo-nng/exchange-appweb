@@ -1,0 +1,9 @@
+node_modules
+docs
+.superpowers
+.worktrees
+.netlify
+*.pdf
+*.md
+gen-icons.js
+deno.lock

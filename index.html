@@ -555,10 +555,11 @@ const CURRENCIES = [
 
 const CHART_COLORS = { USD: '#2563EB', JPY: '#D97706', CNY: '#DC2626' };
 // Netlify 함수 경로 (배포 시) / 로컬 테스트 시 직접 Yahoo Finance로 폴백
-const API_BASE = '/.netlify/functions/rates';
+const API_BASE = '/api/rates';
 
 let historicalData = {};
 let currentRates = {};
+let currentRatesData = []; // 카드 재렌더용 원본 데이터 보관
 let ratesUpdatedAt = null;
 let isCalcOpen = false;
 let chart = null;
@@ -827,6 +828,7 @@ function changePeriod(period, btn) {
 async function loadCurrentRates() {
   try {
     const rates = await fetchCurrentRates();
+    currentRatesData = rates;
     rates.forEach(d => {
       if (!d.code) return;
       const meta = {
@@ -850,6 +852,21 @@ async function loadCurrentRates() {
   }
 }
 
+function rerenderCards() {
+  currentRatesData.forEach(d => {
+    if (!d.code) return;
+    const meta = {
+      regularMarketPrice: d.rate,
+      chartPreviousClose: d.prevClose,
+      fiftyTwoWeekHigh: d.high52w,
+      fiftyTwoWeekLow: d.low52w,
+      regularMarketTime: d.updatedAt,
+    };
+    const stats = calcStats(d.code, d.rate, { fiftyTwoWeekLow: d.low52w, fiftyTwoWeekHigh: d.high52w });
+    renderCard(d.code, meta, stats);
+  });
+}
+
 async function loadHistoricalData() {
   try {
     const data = await fetchHistoricalRates('1y');
@@ -858,6 +875,7 @@ async function loadHistoricalData() {
     console.warn('과거 데이터 로드 실패:', err);
   }
   updateChart();
+  rerenderCards(); // historicalData 확보 후 카드 재렌더 → 평균 배지 즉시 표시
 }
 
 async function refreshAll() {
