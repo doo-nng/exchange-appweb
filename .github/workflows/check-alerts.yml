@@ -1,0 +1,27 @@
+name: check-alerts
+
+# 환율 알림 스케줄러 — 평일 KST 09:00~18:00, 매시간 (UTC 00:00~09:00)
+# GitHub Actions cron은 부하에 따라 수 분 지연될 수 있음(개인 도구라 허용 범위).
+on:
+  schedule:
+    - cron: '0 0-9 * * 1-5'
+  workflow_dispatch: {}   # 수동 실행/테스트용
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install web-push
+        run: npm install web-push@^3.6.7 --no-save --no-audit --no-fund
+      - name: Run alert check
+        run: node scripts/check-alerts.mjs
+        env:
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}

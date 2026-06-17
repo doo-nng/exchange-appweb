@@ -1,4 +1,4 @@
-const CACHE = 'exchange-v5';
+const CACHE = 'exchange-v6';
 const STATIC_ASSETS = [
   '/manifest.json',
   'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
@@ -52,5 +52,34 @@ self.addEventListener('fetch', e => {
   // CDN 정적 자산(JS 라이브러리 등): cache-first — 버전 고정 URL이므로 안전
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
+  );
+});
+
+// ─── 푸시 알림 수신 ────────────────────────────────────
+self.addEventListener('push', e => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch (_) {}
+  const title = data.title || '환율 알림';
+  const options = {
+    body: data.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    data: { url: data.url || '/' },
+    tag: 'exchange-alert',
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+// ─── 알림 클릭 → 앱 열기/포커스 ────────────────────────
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const target = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) {
+        if ('focus' in c) return c.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+    })
   );
 });

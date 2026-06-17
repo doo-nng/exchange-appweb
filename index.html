@@ -435,6 +435,81 @@
       text-align: center;
       padding: 16px 0;
     }
+
+    /* ─── 환율 알림 ─── */
+    .currency-card { cursor: pointer; }
+    .currency-card.loading { cursor: default; }
+
+    .alert-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .alert-badge.active { background: rgba(37,99,235,0.1); color: var(--accent); }
+    .alert-badge.done { background: var(--bg-base); color: var(--text-tertiary); }
+
+    #alert-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4);
+      z-index: 300; display: none;
+    }
+    #alert-overlay.open { display: block; }
+
+    .alert-modal {
+      position: fixed;
+      left: 50%; top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 301;
+      width: 320px; max-width: calc(100vw - 40px);
+      background: var(--bg-card);
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+      display: none;
+    }
+    .alert-modal.open { display: block; }
+
+    .alert-modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 15px; font-weight: 700; color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+    .alert-close {
+      border: none; background: none; cursor: pointer;
+      font-size: 16px; color: var(--text-tertiary); line-height: 1;
+    }
+    .alert-current { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+    .alert-field { display: flex; flex-direction: column; gap: 6px; }
+    .alert-field-label { font-size: 12px; color: var(--text-tertiary); }
+    .alert-input {
+      width: 100%; border: 1px solid var(--border); border-radius: 10px;
+      padding: 11px 12px; font-size: 16px; font-weight: 600;
+      color: var(--text-primary); background: var(--bg-base);
+      outline: none; transition: border-color 0.15s;
+    }
+    .alert-input:focus { border-color: var(--accent); background: white; }
+    .alert-direction { font-size: 12px; margin-top: 8px; min-height: 16px; font-weight: 600; }
+    .alert-direction.below { color: var(--cheap); }
+    .alert-direction.above { color: var(--expensive); }
+    .alert-msg { font-size: 12px; margin-top: 8px; min-height: 16px; }
+    .alert-msg.error { color: #DC2626; }
+    .alert-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .alert-btn-save {
+      flex: 1; padding: 12px; border: none; border-radius: 10px;
+      background: var(--accent); color: white; font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    .alert-btn-save:disabled { opacity: 0.6; cursor: default; }
+    .alert-btn-remove {
+      padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+      background: none; color: var(--text-secondary); font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .alert-ios-note {
+      font-size: 11px; color: var(--text-tertiary); text-align: center;
+      margin-top: 14px; line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -544,6 +619,27 @@
   <div id="calc-body">
     <!-- JS로 채움 -->
   </div>
+</div>
+
+<!-- 알림 설정 모달 -->
+<div id="alert-overlay" onclick="closeAlert()"></div>
+<div class="alert-modal" id="alert-modal" role="dialog" aria-modal="true" aria-label="환율 알림 설정">
+  <div class="alert-modal-header">
+    <span id="alert-modal-title">알림</span>
+    <button class="alert-close" onclick="closeAlert()" aria-label="닫기">✕</button>
+  </div>
+  <div class="alert-current" id="alert-current">현재 --원</div>
+  <div class="alert-field">
+    <label class="alert-field-label" for="alert-price">목표 환율 (원)</label>
+    <input class="alert-input" id="alert-price" type="number" inputmode="decimal" placeholder="예: 1450" oninput="onAlertPriceInput()">
+  </div>
+  <div class="alert-direction" id="alert-direction"></div>
+  <div class="alert-msg" id="alert-msg"></div>
+  <div class="alert-actions">
+    <button class="alert-btn-remove" id="alert-remove" onclick="removeAlert()">알림 해제</button>
+    <button class="alert-btn-save" id="alert-save" onclick="saveAlert()">저장</button>
+  </div>
+  <div class="alert-ios-note">📱 아이폰은 홈 화면에 추가(PWA)한 상태에서만 알림이 동작합니다</div>
 </div>
 
 <script>
@@ -692,6 +788,7 @@ function renderCard(code, meta, stats) {
           <div class="currency-name">${cur.name}</div>
         </div>
       </div>
+      <span class="alert-badge-slot" id="alert-badge-${code}">${alertBadgeHtml(code)}</span>
     </div>
     <div class="card-rate">${fmt(rate, decimals)}</div>
     <div class="card-rate-unit">${cur.unit}</div>
@@ -1041,14 +1138,185 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && isCalcOpen) closeCalc();
 });
 
+// ─── 환율 알림 ────────────────────────────────────────
+const VAPID_PUBLIC_KEY = 'BE9SFVrtFzEBukXE7EHhl7PW_TlaWkDl6TvdURAv5cBj87q5mysYmU7twpRvDpRy6X4GdZeWiRhU-0NhzCFjvEs';
+const ALERT_DECIMALS = { USD: 2, JPY: 3, CNY: 2 };
+const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+let alertTargets = { USD: null, JPY: null, CNY: null };
+let alertActiveCode = null;
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+function fmtAlert(price, code) {
+  const dec = ALERT_DECIMALS[code];
+  return Number(price).toLocaleString('ko-KR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+async function loadAlertTargets() {
+  if (!pushSupported) return;
+  try {
+    const res = await fetch('/api/get-alert');
+    const json = await res.json();
+    if (json.ok) {
+      alertTargets = { USD: null, JPY: null, CNY: null, ...json.targets };
+      ['USD', 'JPY', 'CNY'].forEach(updateAlertBadge);
+    }
+  } catch (e) { /* 배지 없이 진행 */ }
+}
+
+function alertBadgeHtml(code) {
+  const t = alertTargets[code];
+  if (!t) return '';
+  if (t.active) {
+    const dir = t.direction === 'below' ? '이하' : '이상';
+    return `<span class="alert-badge active">🔔 ${fmtAlert(t.price, code)} ${dir}</span>`;
+  }
+  return `<span class="alert-badge done">✓ 달성</span>`;
+}
+
+function updateAlertBadge(code) {
+  const slot = document.getElementById(`alert-badge-${code}`);
+  if (slot) slot.innerHTML = alertBadgeHtml(code);
+}
+
+function detectDirection(code, price) {
+  const rate = currentRates[code];
+  if (!rate || !price) return null;
+  return price <= rate ? 'below' : 'above';
+}
+
+function onAlertPriceInput() {
+  const price = parseFloat(document.getElementById('alert-price').value);
+  const dirEl = document.getElementById('alert-direction');
+  const dir = detectDirection(alertActiveCode, price);
+  if (!dir || isNaN(price)) { dirEl.textContent = ''; dirEl.className = 'alert-direction'; return; }
+  dirEl.textContent = dir === 'below' ? '목표가 이하로 내려가면 알림' : '목표가 이상으로 올라가면 알림';
+  dirEl.className = `alert-direction ${dir}`;
+}
+
+function openAlert(code) {
+  if (!pushSupported) {
+    showToast('이 브라우저는 알림을 지원하지 않습니다 · 아이폰은 홈 화면에 추가해 주세요');
+    return;
+  }
+  alertActiveCode = code;
+  const cur = CURRENCIES.find(c => c.code === code);
+  const rate = currentRates[code];
+  document.getElementById('alert-modal-title').textContent = `${cur.flag} ${code} ${cur.name} 알림`;
+  document.getElementById('alert-current').textContent = rate ? `현재 ${fmtAlert(rate, code)}원` : '현재가 불러오는 중…';
+  const input = document.getElementById('alert-price');
+  const t = alertTargets[code];
+  input.value = t ? t.price : '';
+  document.getElementById('alert-msg').textContent = '';
+  document.getElementById('alert-msg').className = 'alert-msg';
+  document.getElementById('alert-remove').style.display = t ? 'block' : 'none';
+  onAlertPriceInput();
+  document.getElementById('alert-overlay').classList.add('open');
+  document.getElementById('alert-modal').classList.add('open');
+  setTimeout(() => input.focus(), 50);
+}
+
+function closeAlert() {
+  alertActiveCode = null;
+  document.getElementById('alert-overlay').classList.remove('open');
+  document.getElementById('alert-modal').classList.remove('open');
+}
+
+async function saveAlert() {
+  const code = alertActiveCode;
+  const price = parseFloat(document.getElementById('alert-price').value);
+  const msg = document.getElementById('alert-msg');
+  if (isNaN(price) || price <= 0) {
+    msg.textContent = '올바른 목표 환율을 입력해 주세요'; msg.className = 'alert-msg error';
+    return;
+  }
+  const direction = detectDirection(code, price) || 'below';
+  const btn = document.getElementById('alert-save');
+  btn.disabled = true; btn.textContent = '저장 중…';
+  try {
+    let perm = Notification.permission;
+    if (perm === 'default') perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      msg.textContent = '알림을 허용해야 사용할 수 있어요'; msg.className = 'alert-msg error';
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+    }
+    const res = await fetch('/api/save-alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, price, direction, subscription: sub }),
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'save failed');
+    alertTargets = { USD: null, JPY: null, CNY: null, ...json.targets };
+    updateAlertBadge(code);
+    closeAlert();
+    showToast(`${code} 알림 설정됨 · 목표 ${fmtAlert(price, code)}원`);
+  } catch (e) {
+    console.error('saveAlert', e);
+    msg.textContent = '저장에 실패했어요 · 잠시 후 다시 시도해 주세요'; msg.className = 'alert-msg error';
+  } finally {
+    btn.disabled = false; btn.textContent = '저장';
+  }
+}
+
+async function removeAlert() {
+  const code = alertActiveCode;
+  const btn = document.getElementById('alert-remove');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/save-alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, remove: true }),
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error);
+    alertTargets = { USD: null, JPY: null, CNY: null, ...json.targets };
+    updateAlertBadge(code);
+    closeAlert();
+    showToast(`${code} 알림 해제됨`);
+  } catch (e) {
+    document.getElementById('alert-msg').textContent = '해제에 실패했어요';
+    document.getElementById('alert-msg').className = 'alert-msg error';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// 카드 탭 → 알림 모달 (이벤트 위임 — 카드 재렌더에도 유지)
+document.getElementById('cards-grid').addEventListener('click', e => {
+  const card = e.target.closest('.currency-card');
+  if (!card) return;
+  const code = card.id.replace('card-', '');
+  if (['USD', 'JPY', 'CNY'].includes(code)) openAlert(code);
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && alertActiveCode) closeAlert();
+});
+
 // ─── 초기화 ───────────────────────────────────────────
 (async () => {
   if (!navigator.onLine) {
     setBanner('offline', '오프라인 상태 · 마지막으로 불러온 데이터를 표시 중입니다');
     return;
   }
-  // 현재 환율 + 과거 데이터 병렬 로드
-  await Promise.all([loadCurrentRates(), loadHistoricalData()]);
+  // 현재 환율 + 과거 데이터 + 알림 목표 병렬 로드
+  await Promise.all([loadCurrentRates(), loadHistoricalData(), loadAlertTargets()]);
 })();
 </script>
 </body>
