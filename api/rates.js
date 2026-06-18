@@ -3,7 +3,7 @@
 // Node.js native fetch는 sec-fetch-mode:cors 헤더를 자동 추가해 rate limit 유발 → https 모듈 사용
 
 const https = require('https');
-const SYMBOLS = ['USDKRW=X', 'JPYKRW=X', 'CNYKRW=X'];
+const SYMBOLS = ['USDKRW=X', 'JPYKRW=X', 'CNYKRW=X', 'MYRKRW=X', 'DX-Y.NYB'];
 const YAHOO_HOST = 'query2.finance.yahoo.com';
 
 function httpsGet(path) {
@@ -66,10 +66,12 @@ module.exports = async (req, res) => {
 
     if (type === 'history') {
       // CNYKRW=X는 Yahoo에서 직접 과거 데이터가 없음 → USDKRW ÷ USDCNY 크로스 계산
-      const [usdkrwJson, jpykrwJson, usdcnyJson] = await Promise.all([
+      const [usdkrwJson, jpykrwJson, usdcnyJson, myrkrwJson, dxyJson] = await Promise.all([
         httpsGet(`/v8/finance/chart/USDKRW=X?interval=1d&range=${range}`),
         httpsGet(`/v8/finance/chart/JPYKRW=X?interval=1d&range=${range}`),
         httpsGet(`/v8/finance/chart/USDCNY=X?interval=1d&range=${range}`),
+        httpsGet(`/v8/finance/chart/MYRKRW=X?interval=1d&range=${range}`),
+        httpsGet(`/v8/finance/chart/DX-Y.NYB?interval=1d&range=${range}`),
       ]);
 
       function parseChart(json, symbol) {
@@ -84,6 +86,8 @@ module.exports = async (req, res) => {
       const usdkrw = parseChart(usdkrwJson, 'USDKRW=X');
       const jpykrw = parseChart(jpykrwJson, 'JPYKRW=X');
       const usdcny  = parseChart(usdcnyJson, 'USDCNY=X');
+      const myrkrw = parseChart(myrkrwJson, 'MYRKRW=X');
+      const dxy = parseChart(dxyJson, 'DX-Y.NYB');
 
       // USDCNY를 타임스탬프 맵으로 변환 (날짜 단위로 매칭)
       const cnyMap = new Map(usdcny.map(d => [Math.floor(d.ts / 86400), d.close]));
@@ -100,6 +104,8 @@ module.exports = async (req, res) => {
         { symbol: 'USDKRW=X', data: usdkrw },
         { symbol: 'JPYKRW=X', data: jpykrw },
         { symbol: 'CNYKRW=X', data: cnykrw },
+        { symbol: 'MYRKRW=X', data: myrkrw },
+        { symbol: 'DX-Y.NYB', data: dxy },
       ];
       res.setHeader('Cache-Control', 'public, max-age=43200');
       res.status(200).json({ ok: true, data: results });

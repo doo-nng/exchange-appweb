@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
   try {
     const { code, subscription, price, direction, remove } = await readBody(req);
 
-    if (!['USD', 'JPY', 'CNY'].includes(code)) {
+    if (!['USD', 'JPY', 'CNY', 'MYR'].includes(code)) {
       res.status(400).json({ ok: false, error: 'invalid code' });
       return;
     }

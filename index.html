@@ -439,6 +439,13 @@
     /* ─── 환율 알림 ─── */
     .currency-card { cursor: pointer; }
     .currency-card.loading { cursor: default; }
+    /* 달러인덱스 미니카드 — 통화 카드와 구분 (점선 테두리·연한 배경·비클릭) */
+    .index-card { background: var(--bg-base); border: 1px dashed var(--border); cursor: default; }
+    .index-tag {
+      font-size: 10px; font-weight: 700; color: var(--text-tertiary);
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 999px; padding: 2px 7px; height: fit-content;
+    }
 
     .alert-badge {
       display: inline-block;
@@ -577,6 +584,31 @@
       </div>
       <div class="skeleton skeleton-bar"></div>
     </div>
+    <div class="currency-card loading" id="card-MYR">
+      <div class="card-top">
+        <div class="card-currency">
+          <span class="flag">🇲🇾</span>
+          <div><div class="currency-code">MYR</div><div class="currency-name">말레이시아 링깃</div></div>
+        </div>
+      </div>
+      <div class="skeleton skeleton-rate"></div>
+      <div class="skeleton-badges">
+        <div class="skeleton skeleton-badge"></div>
+        <div class="skeleton skeleton-badge"></div>
+      </div>
+      <div class="skeleton skeleton-bar"></div>
+    </div>
+    <div class="currency-card index-card loading" id="card-DXY">
+      <div class="card-top">
+        <div class="card-currency">
+          <span class="flag">📊</span>
+          <div><div class="currency-code">DXY</div><div class="currency-name">달러인덱스</div></div>
+        </div>
+        <span class="index-tag">지수</span>
+      </div>
+      <div class="skeleton skeleton-rate"></div>
+      <div class="skeleton skeleton-bar"></div>
+    </div>
   </div>
 
   <!-- 그래프 -->
@@ -647,9 +679,13 @@ const CURRENCIES = [
   { code: 'USD', symbol: 'USDKRW=X', flag: '🇺🇸', name: '미국 달러', unit: '원/달러' },
   { code: 'JPY', symbol: 'JPYKRW=X', flag: '🇯🇵', name: '일본 엔화', unit: '원/엔' },
   { code: 'CNY', symbol: 'CNYKRW=X', flag: '🇨🇳', name: '중국 위안화', unit: '원/위안' },
+  { code: 'MYR', symbol: 'MYRKRW=X', flag: '🇲🇾', name: '말레이시아 링깃', unit: '원/링깃' },
 ];
 
-const CHART_COLORS = { USD: '#2563EB', JPY: '#D97706', CNY: '#DC2626' };
+const CHART_COLORS = { USD: '#2563EB', JPY: '#D97706', CNY: '#DC2626', MYR: '#0D9488' };
+// 달러인덱스(DXY) — 통화가 아닌 지수. 카드/그래프에서 별도 취급.
+const DXY_SYMBOL = 'DX-Y.NYB';
+const DXY_COLOR = '#9CA3AF';
 // Netlify 함수 경로 (배포 시) / 로컬 테스트 시 직접 Yahoo Finance로 폴백
 const API_BASE = '/api/rates';
 
@@ -709,6 +745,7 @@ async function fetchHistoricalRates(range = '1y') {
   if (!json.ok) throw new Error(json.error);
   const result = {};
   json.data.forEach(d => {
+    if (d.symbol === DXY_SYMBOL) { result['DXY'] = d.data; return; }
     const code = CURRENCIES.find(c => c.symbol === d.symbol)?.code;
     if (code) result[code] = d.data;
   });
@@ -803,6 +840,59 @@ function renderCard(code, meta, stats) {
     </div>`;
 }
 
+// ─── 달러인덱스(DXY) 미니카드 ─────────────────────────
+// 지수라 살때/팔때·원 단위·알림 없음. 값 + 전일대비 + 52주 레인지만.
+function renderDxy(d) {
+  const card = document.getElementById('card-DXY');
+  if (!card) return;
+
+  const rate = d.rate;
+  const prev = d.prevClose;
+  const change = rate - prev;
+  const changePct = prev ? (change / prev) * 100 : 0;
+  const isRise = change > 0.001;
+  const isFall = change < -0.001;
+  const cls = isRise ? 'rise' : isFall ? 'fall' : 'neutral';
+  const sign = isRise ? '▲' : isFall ? '▼' : '─';
+
+  let rangeHtml = '';
+  const low = d.low52w, high = d.high52w;
+  if (low && high && low < high) {
+    const pos = Math.max(0, Math.min(100, ((rate - low) / (high - low)) * 100));
+    rangeHtml = `
+      <div class="range-section">
+        <div class="range-labels"><span>${fmt(low, 1)}</span><span>52주 레인지</span><span>${fmt(high, 1)}</span></div>
+        <div class="range-track" role="progressbar" aria-valuenow="${Math.round(pos)}" aria-valuemin="0" aria-valuemax="100">
+          <div class="range-fill" style="width:${pos}%;background:var(--neutral)"></div>
+          <div class="range-marker" style="left:${pos}%;background:var(--neutral)"></div>
+        </div>
+      </div>`;
+  }
+
+  card.classList.remove('loading');
+  card.innerHTML = `
+    <div class="card-top">
+      <div class="card-currency">
+        <span class="flag">📊</span>
+        <div><div class="currency-code">DXY</div><div class="currency-name">달러인덱스</div></div>
+      </div>
+      <span class="index-tag">지수</span>
+    </div>
+    <div class="card-rate">${fmt(rate, 2)}</div>
+    <div class="card-rate-unit">ICE 달러인덱스 · 기준 100</div>
+    <div class="stat-badges">
+      <div class="stat-badge-block">
+        <span class="badge-label">전일 대비</span>
+        <span class="stat-badge ${cls}">${sign} ${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%</span>
+      </div>
+    </div>
+    ${rangeHtml}
+    <div class="card-footer">
+      <div class="card-source">ICE · Yahoo Finance</div>
+      <div class="card-disclaimer">달러 강세 해석 기준</div>
+    </div>`;
+}
+
 // ─── 레인지 계산 ──────────────────────────────────────
 // 52주 범위는 Yahoo Finance meta 값 사용 (CNY도 포함), avg는 충분한 historical data 있을 때만
 function calcStats(code, currentRate, w52) {
@@ -860,6 +950,27 @@ function updateChart() {
     };
   }).filter(Boolean);
 
+  // 달러인덱스(DXY) — 회색 점선 기준선으로 추가 (데이터 있을 때만)
+  const dxyHist = filterByPeriod(historicalData['DXY'] || [], currentPeriod);
+  if (dxyHist.length > 0) {
+    const base = dxyHist[0].close;
+    datasets.push({
+      label: 'DXY',
+      data: dxyHist.map(d => ({ x: d.ts * 1000, y: ((d.close - base) / base) * 100 })),
+      borderColor: DXY_COLOR,
+      borderWidth: 1.5,
+      borderDash: [5, 4],
+      pointRadius: 0,
+      pointBorderWidth: 0,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: DXY_COLOR,
+      tension: 0.3,
+      fill: false,
+      baseRate: base,
+      isIndex: true,
+    });
+  }
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -876,9 +987,13 @@ function updateChart() {
             const pct = item.parsed.y;
             const base = item.dataset.baseRate;
             const code = item.dataset.label;
+            const sign = pct >= 0 ? '+' : '';
+            // DXY는 지수 → '원' 없이 지수값 표시
+            if (item.dataset.isIndex) {
+              return ` ${code}: ${sign}${pct.toFixed(2)}% · ${fmt(base * (1 + pct / 100), 2)}`;
+            }
             const decimals = code === 'JPY' ? 3 : 2;
             const actualRate = base * (1 + pct / 100);
-            const sign = pct >= 0 ? '+' : '';
             return ` ${code}: ${sign}${pct.toFixed(2)}% · ${fmt(actualRate, decimals)}원`;
           },
         }
@@ -939,6 +1054,9 @@ async function loadCurrentRates() {
       renderCard(d.code, meta, stats);
       currentRates[d.code] = d.rate;
     });
+    // 달러인덱스(DXY)는 통화가 아니라 별도 추출 → 미니카드 렌더
+    const dxyEntry = rates.find(d => d.symbol === DXY_SYMBOL);
+    if (dxyEntry) renderDxy(dxyEntry);
     ratesUpdatedAt = rates[0].updatedAt;
     const updatedAt = fmtDate(rates[0].updatedAt);
     document.getElementById('update-info').textContent = `Yahoo Finance 기준 · ${updatedAt} 업데이트`;
@@ -1140,9 +1258,9 @@ document.addEventListener('keydown', e => {
 
 // ─── 환율 알림 ────────────────────────────────────────
 const VAPID_PUBLIC_KEY = 'BE9SFVrtFzEBukXE7EHhl7PW_TlaWkDl6TvdURAv5cBj87q5mysYmU7twpRvDpRy6X4GdZeWiRhU-0NhzCFjvEs';
-const ALERT_DECIMALS = { USD: 2, JPY: 3, CNY: 2 };
+const ALERT_DECIMALS = { USD: 2, JPY: 3, CNY: 2, MYR: 2 };
 const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-let alertTargets = { USD: null, JPY: null, CNY: null };
+let alertTargets = { USD: null, JPY: null, CNY: null, MYR: null };
 let alertActiveCode = null;
 
 function urlBase64ToUint8Array(base64String) {
@@ -1165,8 +1283,8 @@ async function loadAlertTargets() {
     const res = await fetch('/api/get-alert');
     const json = await res.json();
     if (json.ok) {
-      alertTargets = { USD: null, JPY: null, CNY: null, ...json.targets };
-      ['USD', 'JPY', 'CNY'].forEach(updateAlertBadge);
+      alertTargets = { USD: null, JPY: null, CNY: null, MYR: null, ...json.targets };
+      ['USD', 'JPY', 'CNY', 'MYR'].forEach(updateAlertBadge);
     }
   } catch (e) { /* 배지 없이 진행 */ }
 }
@@ -1262,7 +1380,7 @@ async function saveAlert() {
     });
     const json = await res.json();
     if (!json.ok) throw new Error(json.error || 'save failed');
-    alertTargets = { USD: null, JPY: null, CNY: null, ...json.targets };
+    alertTargets = { USD: null, JPY: null, CNY: null, MYR: null, ...json.targets };
     updateAlertBadge(code);
     closeAlert();
     showToast(`${code} 알림 설정됨 · 목표 ${fmtAlert(price, code)}원`);
@@ -1286,7 +1404,7 @@ async function removeAlert() {
     });
     const json = await res.json();
     if (!json.ok) throw new Error(json.error);
-    alertTargets = { USD: null, JPY: null, CNY: null, ...json.targets };
+    alertTargets = { USD: null, JPY: null, CNY: null, MYR: null, ...json.targets };
     updateAlertBadge(code);
     closeAlert();
     showToast(`${code} 알림 해제됨`);
@@ -1303,7 +1421,7 @@ document.getElementById('cards-grid').addEventListener('click', e => {
   const card = e.target.closest('.currency-card');
   if (!card) return;
   const code = card.id.replace('card-', '');
-  if (['USD', 'JPY', 'CNY'].includes(code)) openAlert(code);
+  if (['USD', 'JPY', 'CNY', 'MYR'].includes(code)) openAlert(code);
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && alertActiveCode) closeAlert();

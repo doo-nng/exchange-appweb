@@ -7,7 +7,7 @@ import webpush from 'web-push';
 const BASE = process.env.UPSTASH_REDIS_REST_URL;
 const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const KEY = 'alerts:user';
-const SYMBOLS = { USD: 'USDKRW=X', JPY: 'JPYKRW=X', CNY: 'CNYKRW=X' };
+const SYMBOLS = { USD: 'USDKRW=X', JPY: 'JPYKRW=X', CNY: 'CNYKRW=X', MYR: 'MYRKRW=X' };
 const YAHOO_HOST = 'query2.finance.yahoo.com';
 
 webpush.setVapidDetails(
