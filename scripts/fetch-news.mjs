@@ -189,8 +189,12 @@ async function main() {
 
   const prev = await getNews();
   const rates = await fetchRateMoves();
-  const collected = dedupe([...(await fetchNaver()), ...(await fetchRss())].filter(it => KW.test(`${it.title} ${it.desc || ''}`)));
-  console.log(`collected ${collected.length} relevant items, ${rates.length} rate moves`);
+  const rel = it => KW.test(`${it.title} ${it.desc || ''}`);
+  const naverItems = (await fetchNaver()).filter(rel);
+  const rssItems = (await fetchRss()).filter(rel);
+  // RSS(한국경제·글로벌 FX) 우선 + 네이버는 캡 → 일반 증시 뉴스가 FX 드라이버 뉴스를 밀어내지 않게
+  const collected = dedupe([...rssItems, ...naverItems.slice(0, 14)]);
+  console.log(`collected ${collected.length} (rss ${rssItems.length}, naver ${naverItems.length}), ${rates.length} rate moves`);
 
   if (collected.length === 0) { console.log('수집된 뉴스 없음 — 직전 값 유지'); return; }
 
