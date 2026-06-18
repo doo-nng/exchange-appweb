@@ -517,6 +517,35 @@
       font-size: 11px; color: var(--text-tertiary); text-align: center;
       margin-top: 14px; line-height: 1.5;
     }
+
+    /* ─── 환율 브리핑(뉴스) ─── */
+    .news-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      margin-bottom: 24px;
+    }
+    .news-header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+    .news-title { font-size: 15px; font-weight: 700; color: var(--text-primary); }
+    .news-updated { font-size: 11px; color: var(--text-tertiary); }
+    .news-headline { font-size: 14px; font-weight: 700; color: var(--text-primary); line-height: 1.45; margin-bottom: 12px; }
+    .news-drivers { display: flex; flex-direction: column; gap: 7px; margin-bottom: 6px; }
+    .news-driver { font-size: 13px; color: var(--text-secondary); line-height: 1.4; }
+    .news-sub { font-size: 11px; font-weight: 700; color: var(--text-tertiary); margin: 14px 0 8px; }
+    .news-themes { display: flex; flex-direction: column; gap: 8px; }
+    .news-theme { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+    .news-theme-title { font-weight: 600; color: var(--text-primary); min-width: 92px; flex-shrink: 0; }
+    .news-theme-status { flex: 1; }
+    .news-trend { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+    .news-trend.up { background: rgba(220,38,38,0.1); color: #DC2626; }
+    .news-trend.down { background: rgba(13,148,136,0.12); color: #0D9488; }
+    .news-trend.flat { background: var(--bg-base); color: var(--text-tertiary); }
+    .news-sources { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .news-source-link { font-size: 11px; color: var(--text-tertiary); text-decoration: none; }
+    .news-source-link:hover { text-decoration: underline; color: var(--accent); }
+    .news-loading, .news-empty { font-size: 13px; color: var(--text-tertiary); text-align: center; padding: 18px 0; }
   </style>
 </head>
 <body>
@@ -628,6 +657,17 @@
       <div class="chart-error" id="chart-error">그래프를 불러오지 못했습니다. 새로고침해 주세요.</div>
     </div>
     <div class="chart-source">기간 시작 대비 등락률 · Yahoo Finance (FX 시장 기준)</div>
+  </div>
+
+  <!-- 환율 브리핑(뉴스) 섹션 -->
+  <div class="news-section" id="news-section">
+    <div class="news-header">
+      <div class="news-title">📰 환율 브리핑</div>
+      <div class="news-updated" id="news-updated"></div>
+    </div>
+    <div id="news-body">
+      <div class="news-loading">브리핑을 불러오는 중…</div>
+    </div>
   </div>
 </div>
 
@@ -1427,6 +1467,52 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && alertActiveCode) closeAlert();
 });
 
+// ─── 환율 브리핑(뉴스) ─────────────────────────────────
+const NEWS_TREND_CLASS = { '심화': 'up', '악화': 'up', '진정': 'down', '완화': 'down', '하락': 'down', '지속': 'flat', '진행': 'flat', '유지': 'flat' };
+function newsEmoji(code) { const c = CURRENCIES.find(x => x.code === code); return c ? c.flag : '•'; }
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function loadNews() {
+  try {
+    const res = await fetch('/api/get-news');
+    const json = await res.json();
+    renderNews(json.ok ? json.news : null);
+  } catch (e) {
+    renderNews(null);
+  }
+}
+
+function renderNews(news) {
+  const body = document.getElementById('news-body');
+  const updatedEl = document.getElementById('news-updated');
+  if (!news || !news.brief) {
+    body.innerHTML = '<div class="news-empty">브리핑 준비 중 · 곧 업데이트됩니다</div>';
+    updatedEl.textContent = '';
+    return;
+  }
+  updatedEl.textContent = news.updatedAt
+    ? new Date(news.updatedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' 업데이트'
+    : '';
+
+  const b = news.brief;
+  const drivers = (b.drivers || [])
+    .map(d => `<div class="news-driver">${newsEmoji(d.code)} ${escHtml(d.line)}</div>`).join('');
+  const themes = (news.themes || []).map(t => {
+    const cls = NEWS_TREND_CLASS[t.trend] || 'flat';
+    return `<div class="news-theme"><span class="news-theme-title">${escHtml(t.title)}</span><span class="news-theme-status">${escHtml(t.status)}</span><span class="news-trend ${cls}">${escHtml(t.trend)}</span></div>`;
+  }).join('');
+  const sources = (news.sources || [])
+    .map(s => `<a class="news-source-link" href="${escHtml(s.url)}" target="_blank" rel="noopener">${escHtml(s.source || '출처')} ›</a>`).join('');
+
+  body.innerHTML = `
+    ${b.headline ? `<div class="news-headline">${escHtml(b.headline)}</div>` : ''}
+    ${drivers ? `<div class="news-drivers">${drivers}</div>` : ''}
+    ${themes ? `<div class="news-sub">이슈 테마</div><div class="news-themes">${themes}</div>` : ''}
+    ${sources ? `<div class="news-sources">${sources}</div>` : ''}`;
+}
+
 // ─── 초기화 ───────────────────────────────────────────
 (async () => {
   if (!navigator.onLine) {
@@ -1434,7 +1520,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   // 현재 환율 + 과거 데이터 + 알림 목표 병렬 로드
-  await Promise.all([loadCurrentRates(), loadHistoricalData(), loadAlertTargets()]);
+  await Promise.all([loadCurrentRates(), loadHistoricalData(), loadAlertTargets(), loadNews()]);
 })();
 </script>
 </body>
