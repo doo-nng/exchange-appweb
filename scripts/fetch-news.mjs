@@ -1,12 +1,14 @@
 // 환율 브리핑 수집·요약 — GitHub Actions(cron, 하루 1회)에서 실행.
 // 흐름: 당일 환율 변동(Yahoo) + 뉴스(네이버 API·RSS) 수집 → 키워드 필터/중복제거
-//       → 어제 테마와 함께 Gemini(무료)에 전달 → 한국어 brief+themes JSON → Upstash news:latest 저장.
+//       → 어제 테마와 함께 GitHub Models(무료)에 전달 → 한국어 brief+themes JSON → Upstash news:latest 저장.
 // 실패/빈 결과 시 직전 값을 덮어쓰지 않음. 외부 의존성 없음(내장 fetch + node:https만).
+// AI 엔진: GitHub Models (Actions 내장 GITHUB_TOKEN + permissions:models:read, 진짜 0원).
 import https from 'node:https';
 
 const BASE = process.env.UPSTASH_REDIS_REST_URL;
 const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GH_MODELS_TOKEN = process.env.GH_MODELS_TOKEN;
+const GH_MODELS_MODEL = process.env.GH_MODELS_MODEL || 'openai/gpt-4o-mini';
 const YAHOO_HOST = 'query2.finance.yahoo.com';
 const SYMS = { USD: 'USDKRW=X', JPY: 'JPYKRW=X', CNY: 'CNYKRW=X', MYR: 'MYRKRW=X', DXY: 'DX-Y.NYB' };
 
@@ -159,25 +161,31 @@ ${newsStr}
 {"brief":{"headline":"","drivers":[{"code":"USD","line":""}]},"themes":[{"title":"미 연준·금리","status":"","trend":"지속"}]}`;
 }
 
-async function callGemini(prompt) {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+async function callLLM(prompt) {
+  const r = await fetch('https://models.github.ai/inference/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${GH_MODELS_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.4, responseMimeType: 'application/json', maxOutputTokens: 1024 },
+      model: GH_MODELS_MODEL,
+      messages: [
+        { role: 'system', content: '너는 한국 환율 대시보드의 애널리스트다. 반드시 유효한 JSON만 출력한다.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.4,
+      max_tokens: 1024,
+      response_format: { type: 'json_object' },
     }),
   });
-  if (!r.ok) throw new Error(`Gemini HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
+  if (!r.ok) throw new Error(`GitHub Models HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const j = await r.json();
-  const text = j?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini empty response');
+  const text = j?.choices?.[0]?.message?.content;
+  if (!text) throw new Error('GitHub Models empty response');
   return JSON.parse(text);
 }
 
 // ─── 메인 ─────────────────────────────────────────────
 async function main() {
-  if (!process.env.GEMINI_API_KEY) { console.error('GEMINI_API_KEY 미설정'); process.exit(1); }
+  if (!GH_MODELS_TOKEN) { console.error('GH_MODELS_TOKEN 미설정'); process.exit(1); }
 
   const prev = await getNews();
   const rates = await fetchRateMoves();
@@ -189,9 +197,9 @@ async function main() {
   const top = collected.slice(0, 25);
   let ai;
   try {
-    ai = await callGemini(buildPrompt(rates, prev?.themes || [], top));
+    ai = await callLLM(buildPrompt(rates, prev?.themes || [], top));
   } catch (e) {
-    console.error('Gemini 실패 — 직전 값 유지:', e.message);
+    console.error('LLM 실패 — 직전 값 유지:', e.message);
     return;
   }
 
