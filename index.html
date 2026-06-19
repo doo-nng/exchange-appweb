@@ -536,6 +536,9 @@
     .news-flows { display: flex; flex-direction: column; gap: 9px; margin-bottom: 6px; }
     .news-flow { font-size: 13px; color: var(--text-primary); line-height: 1.5; padding-left: 14px; position: relative; }
     .news-flow::before { content: '•'; position: absolute; left: 2px; color: var(--accent); font-weight: 700; }
+    .news-stances { display: flex; flex-direction: column; gap: 7px; margin-bottom: 6px; }
+    .news-stance { font-size: 13px; color: var(--text-secondary); line-height: 1.4; }
+    .news-stance b { color: var(--text-primary); font-weight: 700; }
     .news-sub { font-size: 11px; font-weight: 700; color: var(--text-tertiary); margin: 14px 0 8px; }
     .news-themes { display: flex; flex-direction: column; gap: 8px; }
     .news-theme { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
@@ -1473,6 +1476,7 @@ document.addEventListener('keydown', e => {
 // ─── 환율 브리핑(뉴스) ─────────────────────────────────
 const NEWS_TREND_CLASS = { '심화': 'up', '악화': 'up', '진정': 'down', '완화': 'down', '하락': 'down', '지속': 'flat', '진행': 'flat', '유지': 'flat' };
 function newsEmoji(code) { const c = CURRENCIES.find(x => x.code === code); return c ? c.flag : '•'; }
+const NEWS_KNAME = { USD: '달러', JPY: '엔', CNY: '위안', MYR: '링깃' };
 function escHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -1504,6 +1508,8 @@ function renderNews(news) {
     .map(f => `<div class="news-flow">${escHtml(f)}</div>`).join('');
   const drivers = (b.drivers || [])
     .map(d => `<div class="news-driver">${newsEmoji(d.code)} ${escHtml(d.line)}</div>`).join('');
+  const stance = (b.stance || [])
+    .map(s => `<div class="news-stance">${newsEmoji(s.code)} <b>${escHtml(NEWS_KNAME[s.code] || s.code)}</b> · ${escHtml(s.line)}</div>`).join('');
   const themes = (news.themes || []).map(t => {
     const cls = NEWS_TREND_CLASS[t.trend] || 'flat';
     return `<div class="news-theme"><span class="news-theme-title">${escHtml(t.title)}</span><span class="news-theme-status">${escHtml(t.status)}</span><span class="news-trend ${cls}">${escHtml(t.trend)}</span></div>`;
@@ -1515,6 +1521,7 @@ function renderNews(news) {
     ${b.headline ? `<div class="news-headline">${escHtml(b.headline)}</div>` : ''}
     ${flows ? `<div class="news-sub">핵심 흐름</div><div class="news-flows">${flows}</div>` : ''}
     ${drivers ? `<div class="news-sub">통화별 변동</div><div class="news-drivers">${drivers}</div>` : ''}
+    ${stance ? `<div class="news-sub">환전 관점</div><div class="news-stances">${stance}</div>` : ''}
     ${themes ? `<div class="news-sub">이슈 테마</div><div class="news-themes">${themes}</div>` : ''}
     ${sources ? `<div class="news-sources">${sources}</div>` : ''}`;
 }

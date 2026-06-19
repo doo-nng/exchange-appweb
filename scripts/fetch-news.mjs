@@ -61,8 +61,11 @@ async function fetchRateMoves() {
   for (const [code, sym] of Object.entries(SYMS)) {
     try {
       const m = (await yahoo(sym)).chart.result[0].meta;
-      const pct = ((m.regularMarketPrice - m.chartPreviousClose) / m.chartPreviousClose) * 100;
-      out.push({ code, pct: +pct.toFixed(2) });
+      const price = m.regularMarketPrice;
+      const pct = ((price - m.chartPreviousClose) / m.chartPreviousClose) * 100;
+      const lo = m.fiftyTwoWeekLow, hi = m.fiftyTwoWeekHigh;
+      const pos = (lo && hi && hi > lo) ? Math.round(((price - lo) / (hi - lo)) * 100) : null; // 52주 레인지 내 위치 %
+      out.push({ code, pct: +pct.toFixed(2), pos });
     } catch (e) { /* 개별 실패 무시 */ }
   }
   return out;
@@ -141,7 +144,8 @@ function buildPrompt(rates, prevThemes, news) {
     const dir = r.pct >= 0 ? '▲' : '▼';
     if (r.code === 'DXY') return `달러인덱스 ${dir}${Math.abs(r.pct)}% (${r.pct >= 0 ? '달러 전반 강세' : '달러 전반 약세'})`;
     const mean = r.pct >= 0 ? `${nm} 강세·원화 약세` : `${nm} 약세·원화 강세`;
-    return `원/${nm} ${dir}${Math.abs(r.pct)}% (${mean})`;
+    const posStr = r.pos != null ? `, 52주레인지 ${r.pos}% 위치` : '';
+    return `원/${nm} ${dir}${Math.abs(r.pct)}% (${mean}${posStr})`;
   }).join('\n') || '(데이터 없음)';
   const prevStr = prevThemes.length ? prevThemes.map(t => `- ${t.title}: ${t.status} (${t.trend})`).join('\n') : '(없음)';
   const newsStr = news.map((n, i) => `${i + 1}. (${n.source}) ${n.title}`).join('\n');
@@ -160,6 +164,7 @@ ${newsStr}
 - brief.headline: 오늘 환율 상황 한 줄(25자 내외). [오늘 환율 변동]의 실제 방향을 반영하라. 데이터가 달러 약세(원/달러 ▼)면 "달러 강세"라고 쓰지 마라.
 - brief.flows: 오늘의 핵심 "인과 흐름" 2~3개. 각 항목은 "원인 이슈 → (메커니즘) → 환율 결과(방향)" 한 줄로, 위 [오늘 뉴스 헤드라인]의 구체적 이슈와 [오늘 환율 변동]을 연결하라. **결과의 방향(상승/하락·강세/약세)은 반드시 [오늘 환율 변동]의 실제 부호와 일치시켜라(모순 금지). 구체적 % 숫자는 흐름에 쓰지 마라 — 숫자는 통화별 변동에만 표시한다.** 예) "美 FOMC 매파적 동결 → 달러 약세 → 원/달러 하락, 위안·엔도 동반 하락".
 - brief.drivers: 통화별 변동 요약 3~4개(참고용). code는 USD/JPY/CNY/MYR 중 하나. line은 "달러 ▲0.3% · 한줄이유" 형식, 18자 내외.
+- brief.stance: 통화별 "환전 관점" 4개(USD/JPY/CNY/MYR 각각). line은 "52주 위치 → 환전 판단" 형식(18자 내외). [오늘 환율 변동]의 '52주레인지 N% 위치'를 기준으로: 70%↑=고점권(비쌈, "환전 신중"/"분할만"), 30~70%=중간("관망"), 30%↓=저점권(저렴, "분할 매수 고려"). 예) "52주 고점권 → 환전 신중".
 - themes: 정확히 아래 5개(이 순서/제목). 각 테마마다 위 [오늘 뉴스 헤드라인]에서 관련 내용을 적극적으로 찾아 status를 구체적 현황 1줄(20자 내외)로 써라. 예) "FOMC 매파적 동결", "BOE 금리 동결", "이란 제재로 유가 출렁". trend는 [심화|지속|완화|진정] 중 하나(어제 테마와 비교, 어제가 없으면 지속).
   1) 미 연준·금리 (연준·FOMC·미국 금리·국채·인플레)
   2) 한국경제·한은 (원화·한국 금리·수출·경상수지)
@@ -170,7 +175,7 @@ ${newsStr}
 - URL이나 없는 사실을 지어내지 마라.
 
 출력 JSON 스키마:
-{"brief":{"headline":"","flows":["","",""],"drivers":[{"code":"USD","line":""}]},"themes":[{"title":"미 연준·금리","status":"","trend":"지속"}]}`;
+{"brief":{"headline":"","flows":["","",""],"drivers":[{"code":"USD","line":""}],"stance":[{"code":"USD","line":""}]},"themes":[{"title":"미 연준·금리","status":"","trend":"지속"}]}`;
 }
 
 async function callLLM(prompt) {
