@@ -11,6 +11,7 @@ const GH_MODELS_TOKEN = process.env.GH_MODELS_TOKEN;
 const GH_MODELS_MODEL = process.env.GH_MODELS_MODEL || 'openai/gpt-4o-mini';
 const YAHOO_HOST = 'query2.finance.yahoo.com';
 const SYMS = { USD: 'USDKRW=X', JPY: 'JPYKRW=X', CNY: 'CNYKRW=X', MYR: 'MYRKRW=X', DXY: 'DX-Y.NYB' };
+const KNAME = { USD: '달러', JPY: '엔', CNY: '위안', MYR: '링깃', DXY: '달러인덱스' };
 
 const NAVER_QUERIES = ['환율', '원달러 환율', '연준 금리', '위안 환율', '엔화'];
 const RSS_FEEDS = [
@@ -135,7 +136,13 @@ function dedupe(items) {
 
 // ─── Gemini 요약 ──────────────────────────────────────
 function buildPrompt(rates, prevThemes, news) {
-  const moveStr = rates.map(r => `${r.code} ${r.pct >= 0 ? '▲' : '▼'}${Math.abs(r.pct)}%`).join(', ') || '(데이터 없음)';
+  const moveStr = rates.map(r => {
+    const nm = KNAME[r.code] || r.code;
+    const dir = r.pct >= 0 ? '▲' : '▼';
+    if (r.code === 'DXY') return `달러인덱스 ${dir}${Math.abs(r.pct)}% (${r.pct >= 0 ? '달러 전반 강세' : '달러 전반 약세'})`;
+    const mean = r.pct >= 0 ? `${nm} 강세·원화 약세` : `${nm} 약세·원화 강세`;
+    return `원/${nm} ${dir}${Math.abs(r.pct)}% (${mean})`;
+  }).join('\n') || '(데이터 없음)';
   const prevStr = prevThemes.length ? prevThemes.map(t => `- ${t.title}: ${t.status} (${t.trend})`).join('\n') : '(없음)';
   const newsStr = news.map((n, i) => `${i + 1}. (${n.source}) ${n.title}`).join('\n');
   return `너는 한국 환율 대시보드의 애널리스트다. 아래 정보로 환율에 영향 주는 핵심만 한국어로 간결히 정리해라. 반드시 JSON만 출력한다.
@@ -150,7 +157,7 @@ ${prevStr}
 ${newsStr}
 
 규칙:
-- brief.headline: 오늘 환율 상황 한 줄(25자 내외).
+- brief.headline: 오늘 환율 상황 한 줄(25자 내외). [오늘 환율 변동]의 실제 방향을 반영하라. 데이터가 달러 약세(원/달러 ▼)면 "달러 강세"라고 쓰지 마라.
 - brief.flows: 오늘의 핵심 "인과 흐름" 2~3개. 각 항목은 "원인 이슈 → (메커니즘) → 환율 결과" 한 줄로, 위 [오늘 뉴스 헤드라인]의 구체적 이슈와 [오늘 환율 변동]을 연결하라. **중요: '환율 결과'의 방향(상승/하락)은 반드시 [오늘 환율 변동]의 실제 부호(▲=상승, ▼=하락)와 일치해야 한다. 데이터와 모순되는 서술(예: 데이터는 ▼인데 '상승'이라 쓰기) 절대 금지.** 통화마다 방향이 다르면 다르게 써라. 예) "美 FOMC 매파적 동결 → 달러 강세 → 원/달러 ▲0.6%, 반면 엔·위안은 ▼ 약세".
 - brief.drivers: 통화별 변동 요약 3~4개(참고용). code는 USD/JPY/CNY/MYR 중 하나. line은 "달러 ▲0.3% · 한줄이유" 형식, 18자 내외.
 - themes: 정확히 아래 5개(이 순서/제목). 각 테마마다 위 [오늘 뉴스 헤드라인]에서 관련 내용을 적극적으로 찾아 status를 구체적 현황 1줄(20자 내외)로 써라. 예) "FOMC 매파적 동결", "BOE 금리 동결", "이란 제재로 유가 출렁". trend는 [심화|지속|완화|진정] 중 하나(어제 테마와 비교, 어제가 없으면 지속).
