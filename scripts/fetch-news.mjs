@@ -8,7 +8,7 @@ import https from 'node:https';
 const BASE = process.env.UPSTASH_REDIS_REST_URL;
 const TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 const GH_MODELS_TOKEN = process.env.GH_MODELS_TOKEN;
-const GH_MODELS_MODEL = process.env.GH_MODELS_MODEL || 'openai/gpt-4o-mini';
+const GH_MODELS_MODEL = process.env.GH_MODELS_MODEL || 'openai/gpt-4o';
 const YAHOO_HOST = 'query2.finance.yahoo.com';
 const SYMS = { USD: 'USDKRW=X', JPY: 'JPYKRW=X', CNY: 'CNYKRW=X', MYR: 'MYRKRW=X', DXY: 'DX-Y.NYB' };
 const KNAME = { USD: '달러', JPY: '엔', CNY: '위안', MYR: '링깃', DXY: '달러인덱스' };
