@@ -151,7 +151,8 @@ ${newsStr}
 
 규칙:
 - brief.headline: 오늘 환율 상황 한 줄(25자 내외).
-- brief.drivers: 움직임이 크거나 뉴스 근거가 있는 통화 위주 3~5개. code는 USD/JPY/CNY/MYR 중 하나. line은 "달러 ▲0.3% · 이유" 형식, 20자 내외.
+- brief.flows: 오늘의 핵심 "인과 흐름" 2~3개. 각 항목은 "원인 이슈 → (메커니즘) → 환율 결과" 한 줄로, 위 [오늘 뉴스 헤드라인]의 구체적 이슈와 [오늘 환율 변동]을 반드시 연결하라. 예) "美 FOMC 매파적 동결 → 달러 강세 → 원/달러·엔·위안 동반 상승".
+- brief.drivers: 통화별 변동 요약 3~4개(참고용). code는 USD/JPY/CNY/MYR 중 하나. line은 "달러 ▲0.3% · 한줄이유" 형식, 18자 내외.
 - themes: 정확히 아래 5개(이 순서/제목). 각 테마마다 위 [오늘 뉴스 헤드라인]에서 관련 내용을 적극적으로 찾아 status를 구체적 현황 1줄(20자 내외)로 써라. 예) "FOMC 매파적 동결", "BOE 금리 동결", "이란 제재로 유가 출렁". trend는 [심화|지속|완화|진정] 중 하나(어제 테마와 비교, 어제가 없으면 지속).
   1) 미 연준·금리 (연준·FOMC·미국 금리·국채·인플레)
   2) 한국경제·한은 (원화·한국 금리·수출·경상수지)
@@ -162,7 +163,7 @@ ${newsStr}
 - URL이나 없는 사실을 지어내지 마라.
 
 출력 JSON 스키마:
-{"brief":{"headline":"","drivers":[{"code":"USD","line":""}]},"themes":[{"title":"미 연준·금리","status":"","trend":"지속"}]}`;
+{"brief":{"headline":"","flows":["","",""],"drivers":[{"code":"USD","line":""}]},"themes":[{"title":"미 연준·금리","status":"","trend":"지속"}]}`;
 }
 
 async function callLLM(prompt) {

@@ -533,6 +533,9 @@
     .news-headline { font-size: 14px; font-weight: 700; color: var(--text-primary); line-height: 1.45; margin-bottom: 12px; }
     .news-drivers { display: flex; flex-direction: column; gap: 7px; margin-bottom: 6px; }
     .news-driver { font-size: 13px; color: var(--text-secondary); line-height: 1.4; }
+    .news-flows { display: flex; flex-direction: column; gap: 9px; margin-bottom: 6px; }
+    .news-flow { font-size: 13px; color: var(--text-primary); line-height: 1.5; padding-left: 14px; position: relative; }
+    .news-flow::before { content: '•'; position: absolute; left: 2px; color: var(--accent); font-weight: 700; }
     .news-sub { font-size: 11px; font-weight: 700; color: var(--text-tertiary); margin: 14px 0 8px; }
     .news-themes { display: flex; flex-direction: column; gap: 8px; }
     .news-theme { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
@@ -1497,6 +1500,8 @@ function renderNews(news) {
     : '';
 
   const b = news.brief;
+  const flows = (b.flows || [])
+    .map(f => `<div class="news-flow">${escHtml(f)}</div>`).join('');
   const drivers = (b.drivers || [])
     .map(d => `<div class="news-driver">${newsEmoji(d.code)} ${escHtml(d.line)}</div>`).join('');
   const themes = (news.themes || []).map(t => {
@@ -1508,7 +1513,8 @@ function renderNews(news) {
 
   body.innerHTML = `
     ${b.headline ? `<div class="news-headline">${escHtml(b.headline)}</div>` : ''}
-    ${drivers ? `<div class="news-drivers">${drivers}</div>` : ''}
+    ${flows ? `<div class="news-sub">핵심 흐름</div><div class="news-flows">${flows}</div>` : ''}
+    ${drivers ? `<div class="news-sub">통화별 변동</div><div class="news-drivers">${drivers}</div>` : ''}
     ${themes ? `<div class="news-sub">이슈 테마</div><div class="news-themes">${themes}</div>` : ''}
     ${sources ? `<div class="news-sources">${sources}</div>` : ''}`;
 }
